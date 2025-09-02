@@ -5,7 +5,7 @@ import OpenAI from "openai";
 
 const slack = new WebClient(process.env.SLACK_USER_TOKEN);
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
-
+//current slack channels for ingestion
 const CHANNELS = ["general", "today-i-learned", "erp2025-announcements"];
 
 type MessageDoc = {

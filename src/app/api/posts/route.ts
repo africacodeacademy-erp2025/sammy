@@ -1,11 +1,10 @@
-// app/api/generate-post/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../lib/mongo";
 import OpenAI from "openai";
 import { Graph } from "@langchain/langgraph";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
-
+//ThreadId for continued chats
 function generateThreadId() {
   return Math.random().toString(36).substring(2, 12);
 }
@@ -20,7 +19,7 @@ export async function GET(req: NextRequest) {
     const collection = db.collection("messages");
 
     const queryEmbedding = await getEmbedding(prompt);
-
+    //Create a vector search for simentic search
     const vectorSearchResults = await collection
       .aggregate([
         {
@@ -54,7 +53,7 @@ export async function GET(req: NextRequest) {
         .join("\n");
       return `You are an internal communications and posting expert agent. Write a concise professional Post. Context:\n${contextText}\nUser request:\n${input}`;
     })();
-
+    //Compile the LLM
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
