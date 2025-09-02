@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@langchain/langgraph": "^0.4.9",
     "@slack/web-api": "^7.10.0",
     "dotenv": "^17.2.1",
     "mongodb": "^6.19.0",
