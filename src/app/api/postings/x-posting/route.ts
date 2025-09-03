@@ -1,4 +1,3 @@
-// app/api/social/post/route.ts (Next.js App Router)
 import { NextRequest, NextResponse } from "next/server";
 import { TwitterApi } from "twitter-api-v2";
 
@@ -14,7 +13,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (platform.toLowerCase() === "x" || platform.toLowerCase() === "twitter") {
+    if (
+      platform.toLowerCase() === "x" ||
+      platform.toLowerCase() === "twitter"
+    ) {
       // Initialize Twitter client
       const client = new TwitterApi({
         appKey: process.env.TWITTER_API_KEY as string,
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
       { error: `Platform '${platform}' not supported yet.` },
       { status: 400 }
     );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Something went wrong" },
