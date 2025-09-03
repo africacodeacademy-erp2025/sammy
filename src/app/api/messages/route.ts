@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/messages/route.ts
+import { NextResponse } from "next/server";
 import { WebClient } from "@slack/web-api";
 import { connectDB } from "../../../../lib/mongo";
 import OpenAI from "openai";
@@ -14,7 +15,7 @@ type MessageDoc = {
   embedding: number[];
 };
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const db = await connectDB();
     const collection = db.collection<MessageDoc>("messages");
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest) {
           model: "text-embedding-3-small",
           input: msg.text,
         });
+
         const embedding = embeddingResp.data[0].embedding;
 
         const doc: MessageDoc = {
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, messages: results });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(err);
     return NextResponse.json(
       { success: false, error: err.message },
