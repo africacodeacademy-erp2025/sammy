@@ -1,3 +1,4 @@
+// src/app/api/posts/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../lib/mongo";
 import OpenAI from "openai";
