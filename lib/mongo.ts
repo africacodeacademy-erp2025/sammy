@@ -6,7 +6,7 @@ let db: ReturnType<MongoClient["db"]>;
 export async function connectDB() {
   if (!db) {
     await client.connect();
-    db = client.db("sammydb");
+    db = client.db(process.env.DATABASE_NAME);
     console.log("Connected to MongoDB Atlas");
   }
   return db;

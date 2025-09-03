@@ -5,8 +5,6 @@ import OpenAI from "openai";
 
 const slack = new WebClient(process.env.SLACK_USER_TOKEN);
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
-//current slack channels for ingestion
-const CHANNELS = ["general", "today-i-learned", "erp2025-announcements"];
 
 type MessageDoc = {
   channel: string;
@@ -21,6 +19,20 @@ export async function GET(req: NextRequest) {
     const db = await connectDB();
     const collection = db.collection<MessageDoc>("messages");
     const results: MessageDoc[] = [];
+
+    // Get the channels from the URL query parameters
+    const { searchParams } = new URL(req.url);
+    const channelsParam = searchParams.get("channels");
+
+    // Split the comma-separated string into an array of channel names
+    const CHANNELS = channelsParam ? channelsParam.split(",") : [];
+
+    if (CHANNELS.length === 0) {
+      return NextResponse.json(
+        { success: false, error: "No channels specified." },
+        { status: 400 }
+      );
+    }
 
     for (const channelName of CHANNELS) {
       const list = await slack.conversations.list({ types: "public_channel" });
@@ -68,6 +80,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, messages: results });
   } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ success: false, error: err.message });
+    return NextResponse.json(
+      { success: false, error: err.message },
+      { status: 500 }
+    );
   }
 }
