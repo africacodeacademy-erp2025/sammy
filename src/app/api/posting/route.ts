@@ -1,67 +1,45 @@
-// src/app/api/posting/route.ts
+// app/api/social/post/route.ts (Next.js App Router)
 import { NextRequest, NextResponse } from "next/server";
-import TwitterApi from "twitter-api-v2";
+import { TwitterApi } from "twitter-api-v2";
 
 export async function POST(req: NextRequest) {
   try {
-    // Read raw body safely
-    const bodyText = await req.text();
+    const body = await req.json();
+    const { post, platform } = body;
 
-    if (!bodyText) {
-      return NextResponse.json({
-        success: false,
-        error: "Request body is empty",
-      });
+    if (!post || !platform) {
+      return NextResponse.json(
+        { error: "Missing 'post' or 'platform' in request body" },
+        { status: 400 }
+      );
     }
 
-    let data: { post?: string; platform?: string };
-    try {
-      data = JSON.parse(bodyText);
-    } catch {
-      return NextResponse.json({
-        success: false,
-        error: "Invalid JSON format",
-      });
-    }
-
-    const { post, platform } = data;
-
-    if (!post || typeof post !== "string") {
-      return NextResponse.json({
-        success: false,
-        error: "Missing or invalid 'post' content",
-      });
-    }
-
-    const targetPlatform = platform || "twitter";
-
-    if (targetPlatform === "twitter") {
+    if (platform.toLowerCase() === "x" || platform.toLowerCase() === "twitter") {
+      // Initialize Twitter client
       const client = new TwitterApi({
-        appKey: process.env.TWITTER_APP_KEY!,
-        appSecret: process.env.TWITTER_APP_SECRET!,
-        accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-        accessSecret: process.env.TWITTER_ACCESS_SECRET!,
+        appKey: process.env.TWITTER_API_KEY as string,
+        appSecret: process.env.TWITTER_API_SECRET as string,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN as string,
+        accessSecret: process.env.TWITTER_ACCESS_SECRET as string,
       });
 
       const rwClient = client.readWrite;
+
+      // Send the tweet
       const tweet = await rwClient.v2.tweet(post);
 
-      return NextResponse.json({
-        success: true,
-        platform: "twitter",
-        tweetId: tweet.data.id,
-        url: `https://x.com/i/web/status/${tweet.data.id}`,
-      });
+      return NextResponse.json({ success: true, tweet });
     }
 
-    return NextResponse.json({
-      success: false,
-      error: `Platform '${targetPlatform}' not supported yet.`,
-    });
-  } catch (err: unknown) {
-    console.error("Posting error:", err);
-    const message =
-      err instanceof Error ? err.message : "An unexpected error occurred";
-    return NextResponse.json({ success: false, error: message });
+    return NextResponse.json(
+      { error: `Platform '${platform}' not supported yet.` },
+      { status: 400 }
+    );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message || "Something went wrong" },
+      { status: 500 }
+    );
   }
 }
