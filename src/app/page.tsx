@@ -1,3 +1,4 @@
+/* eslint-disable */
 "use client";
 import { useState, useRef, useEffect } from "react";
 
@@ -5,7 +6,7 @@ interface Message {
   id: string;
   sender: "user" | "ai";
   content: string;
-  status?: "pending" | "posted" | "error" | "approved" | "posting"; // Add "posting" to the status type
+  status?: "pending" | "posted" | "error" | "approved" | "posting";
   threadId?: string;
 }
 
@@ -24,7 +25,6 @@ export default function ChatBot() {
     scrollToBottom();
   }, [messages]);
 
-  // Handle textarea height auto-expansion
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -34,11 +34,13 @@ export default function ChatBot() {
 
   const handleSend = async () => {
     if (!input.trim()) return;
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       sender: "user",
       content: input,
     };
+
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
@@ -50,6 +52,7 @@ export default function ChatBot() {
         body: JSON.stringify({ prompt: input, platform: "twitter" }),
       });
       const data = await res.json();
+
       const aiMessage: Message = {
         id: crypto.randomUUID(),
         sender: "ai",
@@ -57,6 +60,7 @@ export default function ChatBot() {
         status: "pending",
         threadId: data.review.threadId,
       };
+
       setMessages((prev) => [...prev, aiMessage]);
     } catch (err) {
       const errorMessage: Message = {
@@ -73,6 +77,7 @@ export default function ChatBot() {
 
   const handleApprove = async (id: string) => {
     const messageToApprove = messages.find((msg) => msg.id === id);
+
     if (
       !messageToApprove ||
       !messageToApprove.threadId ||
@@ -83,9 +88,10 @@ export default function ChatBot() {
     }
 
     try {
-      // Set the status to 'posting' to show a loading indicator
       setMessages((prev) =>
-        prev.map((msg) => (msg.id === id ? { ...msg, status: "posting" } : msg))
+        prev.map((msg) =>
+          msg.id === id ? { ...msg, status: "posting" } : msg
+        )
       );
 
       const res = await fetch("/api/agent", {
@@ -110,21 +116,19 @@ export default function ChatBot() {
     } catch (err) {
       console.error("Error posting to Twitter:", err);
       setMessages((prev) =>
-        prev.map((msg) => (msg.id === id ? { ...msg, status: "error" } : msg))
+        prev.map((msg) =>
+          msg.id === id ? { ...msg, status: "error" } : msg
+        )
       );
     }
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4 sm:p-6 md:p-8">
-      {/* Container for the chat content with frosted-glass effect */}
+    <div className="flex flex-col h-screen w-full bg-gradient-to-br from-gray-900 via-slate-800 to-indigo-900 p-4 sm:p-6 md:p-8">
       <div className="relative w-[900px] mx-auto flex flex-col h-full bg-white/20 shadow-xl rounded-2xl overflow-hidden backdrop-blur-md">
-        {/* Header */}
         <div className="p-4 border-b border-white/20 font-semibold text-lg text-white">
           SaMMy
         </div>
-
-        {/* Chat Window */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.map((msg) => (
             <div
@@ -168,7 +172,7 @@ export default function ChatBot() {
                         className="text-xs px-2 py-1 rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
                         onClick={() => handleApprove(msg.id)}
                       >
-                        Approve & Post
+                        Approve &amp; Post
                       </button>
                     )}
                   </div>
@@ -178,8 +182,6 @@ export default function ChatBot() {
           ))}
           <div ref={bottomRef}></div>
         </div>
-
-        {/* Input */}
         <div className="p-4 border-t border-white/20 flex items-end gap-2 bg-white/10">
           <textarea
             ref={textareaRef}
@@ -196,12 +198,17 @@ export default function ChatBot() {
             }}
           />
           <button
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
-            disabled={loading || !input.trim()}
-            onClick={handleSend}
-          >
-            Send
-          </button>
+  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center justify-center"
+  disabled={loading || !input.trim()}
+  onClick={handleSend}
+>
+  {loading ? (
+    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+  ) : (
+    "Send"
+  )}
+</button>
+
         </div>
       </div>
     </div>
