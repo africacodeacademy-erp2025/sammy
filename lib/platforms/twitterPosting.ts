@@ -48,11 +48,23 @@ export async function twitterPosting(
   );
 
   if (!res.ok) {
-    const errorData = await res.json();
-    console.error("External API failed:", errorData);
-    throw new Error(errorData.error || "Failed to post");
-  }
+    let bodyText: string;
 
+    try {
+      // Try to parse JSON error first
+      const errorData = await res.json();
+      console.error("External API failed with JSON:", errorData);
+      bodyText = JSON.stringify(errorData, null, 2);
+    } catch {
+      // If it's not JSON, fallback to raw text
+      bodyText = await res.text();
+      console.error("External API failed with raw response:", bodyText);
+    }
+
+    throw new Error(
+      `External API error (status: ${res.status})\nResponse: ${bodyText}`
+    );
+  }
   const data = await res.json();
 
   return {

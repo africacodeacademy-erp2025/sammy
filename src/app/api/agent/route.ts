@@ -25,7 +25,6 @@ export interface GraphState {
 // === Define Nodes ===
 
 // Node 1: Generate AI post
-// The node must take the entire state object and return a partial state update.
 async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
   const { prompt } = state;
   const db = await connectDB();
@@ -72,7 +71,6 @@ async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
     max_tokens: 250,
   });
 
-  // Access the content correctly.
   const postText = completion.choices[0].message?.content ?? "";
   console.log(postText);
 
@@ -91,10 +89,10 @@ async function getEmbedding(text: string) {
   return embeddingResp.data[0].embedding;
 }
 
-// === Build LangGraph ===
-// Instantiate the StateGraph with a `fields` object that maps keys to `null`
-// and defines a `channels` object to specify how state updates are handled.
-const workflow = new StateGraph<GraphState>({
+// === Build LangGraph Workflows ===
+
+// Workflow 1: Generate only (stops at END for human review)
+const generateWorkflow = new StateGraph<GraphState>({
   channels: {
     prompt: null,
     platform: null,
@@ -102,18 +100,30 @@ const workflow = new StateGraph<GraphState>({
     threadId: null,
   },
 });
+generateWorkflow.addNode("generatePost", generatePost);
+generateWorkflow.addEdge(START, "generatePost" as any);
+generateWorkflow.addEdge("generatePost" as any, END);
 
-workflow.addNode("generatePost", generatePost);
-workflow.addNode("twitterPosting", twitterPosting as any);
+const generateApp = generateWorkflow.compile();
 
-workflow.addEdge(START, "generatePost" as any);
-workflow.addEdge("generatePost" as any, "twitterPosting" as any);
-workflow.addEdge("twitterPosting" as any, END);
+// Workflow 2: Post only (after approval)
+const postWorkflow = new StateGraph<GraphState>({
+  channels: {
+    prompt: null,
+    platform: null,
+    post: null,
+    threadId: null,
+  },
+});
+postWorkflow.addNode("twitterPosting", twitterPosting as any);
+postWorkflow.addEdge(START, "twitterPosting" as any);
+postWorkflow.addEdge("twitterPosting" as any, END);
 
-// Compile the graph into a runnable object
-const app = workflow.compile();
+const postApp = postWorkflow.compile();
 
-// === API Entry Point ===
+// === API Entry Points ===
+
+// Step 1: Generate post → return to UI for human approval
 export async function POST(req: NextRequest) {
   try {
     const { prompt, platform } = await req.json();
@@ -125,8 +135,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Invoke the compiled graph with the initial state
-    const result = await app.invoke({ prompt, platform });
+    const result = await generateApp.invoke({ prompt, platform });
+
+    // Return only the draft for review
+    return NextResponse.json({ success: true, review: result });
+  } catch (err: any) {
+    console.error(err);
+    return NextResponse.json({ success: false, error: err.message });
+  }
+}
+
+// Step 2: Approve & post to X
+export async function PUT(req: NextRequest) {
+  try {
+    const { post, platform, threadId } = await req.json();
+
+    if (!post || !platform || !threadId) {
+      return NextResponse.json(
+        { success: false, error: "Missing 'post', 'platform' or 'threadId'" },
+        { status: 400 }
+      );
+    }
+
+    const result = await postApp.invoke({ post, platform, threadId });
 
     return NextResponse.json({ success: true, result });
   } catch (err: any) {
