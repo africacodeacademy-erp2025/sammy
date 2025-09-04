@@ -1,15 +1,11 @@
 @import "tailwindcss";
 
+/* --- Theme variables --- */
 :root {
   --background: #ffffff;
   --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-mono: monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,8 +15,58 @@
   }
 }
 
+/* --- Base styles --- */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Typing indicator animation --- */
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.typing-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  background-color: white;
+  border-radius: 9999px;
+  display: inline-block;
+  animation: bounce 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* --- Optional: smooth fade animations for ChatBot typing bubble --- */
+.fade-enter {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.fade-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.3s ease-in, transform 0.3s ease-in;
+}
+.fade-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+.fade-exit-active {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
 }
