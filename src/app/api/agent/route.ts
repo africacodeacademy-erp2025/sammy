@@ -54,6 +54,15 @@ async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
     ])
     .toArray();
 
+  // similarity threshold check
+  if (!vectorSearchResults.length || vectorSearchResults[0].score < 0.75) {
+    return {
+      post: "Hey! I kindly request that you make post request relevant to your sources.",
+      platform: state.platform,
+      threadId: generateThreadId(),
+    };
+  }
+
   const context = vectorSearchResults.map((d) => `- ${d.text}`).join("\n");
 
   const completion = await openai.chat.completions.create({
@@ -61,11 +70,21 @@ async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
     messages: [
       {
         role: "system",
-        content: "You are an internal posting expert.",
+        // Stronger system prompt
+        content: `You are a professional posting AI agent.
+- Only generate posts based on the provided context from the database.
+- If the user's request is irrelevant to the context, refuse with a short polite message.
+- Never invent information not present in the context.
+- Always keep posts concise, clear, and professional.`,
       },
       {
         role: "user",
-        content: `You are an internal communications and posting expert. Write a concise professional Post. Context:\n${context}\nUser request:\n${prompt}`,
+        // Grounding instructions in user prompt
+        content: `Context from database:\n${context}\n
+User request:\n${prompt}\n
+Instructions:
+- Generate a post ONLY if the request relates to the context above.
+- If the request is irrelevant, respond with: "This request is outside the scope of the available context."`,
       },
     ],
     max_tokens: 250,
