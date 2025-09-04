@@ -1,7 +1,6 @@
-// src/app/api/messages/route.ts
 import { NextResponse } from "next/server";
 import { WebClient } from "@slack/web-api";
-import { connectDB } from "../../../../lib/mongo";
+import { connectDB } from "../../../../../lib/mongo";
 import OpenAI from "openai";
 
 const slack = new WebClient(process.env.SLACK_USER_TOKEN);
@@ -15,18 +14,16 @@ type MessageDoc = {
   embedding: number[];
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const db = await connectDB();
     const collection = db.collection<MessageDoc>("messages");
     const results: MessageDoc[] = [];
 
-    // Get the channels from the URL query parameters
     const { searchParams } = new URL(req.url);
     const channelsParam = searchParams.get("channels");
 
-    // Split the comma-separated string into an array of channel names
-    const CHANNELS = channelsParam ? channelsParam.split(",") : [];
+    const CHANNELS: string[] = channelsParam ? channelsParam.split(",") : [];
 
     if (CHANNELS.length === 0) {
       return NextResponse.json(
@@ -37,7 +34,7 @@ export async function GET() {
 
     for (const channelName of CHANNELS) {
       const list = await slack.conversations.list({ types: "public_channel" });
-      const channel = list.channels?.find((c) => c.name === channelName);
+      const channel = list.channels?.find((c: any) => c.name === channelName);
 
       if (!channel?.id) {
         console.warn(`Channel ID not found for ${channelName}`);
@@ -51,7 +48,11 @@ export async function GET() {
 
       if (!history.messages) continue;
 
-      for (const msg of history.messages) {
+      for (const msg of history.messages as {
+        text?: string;
+        ts?: string;
+        user?: string;
+      }[]) {
         if (!msg.text || !msg.ts) continue;
 
         const embeddingResp = await openai.embeddings.create({
@@ -83,7 +84,10 @@ export async function GET() {
   } catch (err: unknown) {
     console.error(err);
     return NextResponse.json(
-      { success: false, error: err.message },
+      {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      },
       { status: 500 }
     );
   }

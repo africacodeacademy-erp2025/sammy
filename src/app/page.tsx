@@ -1,103 +1,209 @@
-import Image from "next/image";
+"use client";
+import { useState, useRef, useEffect } from "react";
 
-export default function Home() {
+interface Message {
+  id: string;
+  sender: "user" | "ai";
+  content: string;
+  status?: "pending" | "posted" | "error" | "approved" | "posting"; // Add "posting" to the status type
+  threadId?: string;
+}
+
+export default function ChatBot() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Handle textarea height auto-expansion
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      sender: "user",
+      content: input,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: input, platform: "twitter" }),
+      });
+      const data = await res.json();
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        sender: "ai",
+        content: data.review.post || "No response",
+        status: "pending",
+        threadId: data.review.threadId,
+      };
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (err) {
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        sender: "ai",
+        content: "Failed to generate post.",
+        status: "error",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    const messageToApprove = messages.find((msg) => msg.id === id);
+    if (
+      !messageToApprove ||
+      !messageToApprove.threadId ||
+      messageToApprove.status !== "pending"
+    ) {
+      console.error("Invalid message or status for approval.");
+      return;
+    }
+
+    try {
+      // Set the status to 'posting' to show a loading indicator
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === id ? { ...msg, status: "posting" } : msg))
+      );
+
+      const res = await fetch("/api/agent", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          post: messageToApprove.content,
+          platform: "twitter",
+          threadId: messageToApprove.threadId,
+        }),
+      });
+
+      if (res.ok) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === id ? { ...msg, status: "posted" } : msg
+          )
+        );
+      } else {
+        throw new Error("Failed to post");
+      }
+    } catch (err) {
+      console.error("Error posting to Twitter:", err);
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === id ? { ...msg, status: "error" } : msg))
+      );
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="flex flex-col h-screen w-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-4 sm:p-6 md:p-8">
+      {/* Container for the chat content with frosted-glass effect */}
+      <div className="relative w-[900px] mx-auto flex flex-col h-full bg-white/20 shadow-xl rounded-2xl overflow-hidden backdrop-blur-md">
+        {/* Header */}
+        <div className="p-4 border-b border-white/20 font-semibold text-lg text-white">
+          SaMMy
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+
+        {/* Chat Window */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${
+                msg.sender === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              <div
+                className={`max-w-[80%] rounded-xl p-3 text-sm shadow-md ${
+                  msg.sender === "user"
+                    ? "bg-blue-500 text-white"
+                    : "bg-white/30 text-white"
+                }`}
+              >
+                <div>{msg.content}</div>
+                {msg.sender === "ai" && (
+                  <div className="mt-2 flex items-center gap-2">
+                    {msg.status === "pending" && (
+                      <span className="text-xs text-gray-200">
+                        ⏳ Draft for review
+                      </span>
+                    )}
+                    {msg.status === "posting" && (
+                      <span className="text-xs text-yellow-300 font-medium animate-pulse">
+                        🚀 Posting...
+                      </span>
+                    )}
+                    {msg.status === "posted" && (
+                      <span className="text-xs text-green-300 font-medium">
+                        ✔️ Posted
+                      </span>
+                    )}
+                    {msg.status === "error" && (
+                      <span className="text-xs text-red-300 font-medium">
+                        ❌ Error
+                      </span>
+                    )}
+                    {msg.status === "pending" && (
+                      <button
+                        className="text-xs px-2 py-1 rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
+                        onClick={() => handleApprove(msg.id)}
+                      >
+                        Approve & Post
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef}></div>
+        </div>
+
+        {/* Input */}
+        <div className="p-4 border-t border-white/20 flex items-end gap-2 bg-white/10">
+          <textarea
+            ref={textareaRef}
+            className="flex-1 border border-white/30 rounded-lg px-3 py-2 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-400 max-h-40 text-sm bg-white/20 text-white placeholder-gray-200"
+            placeholder="Instruct SaMMy..."
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <button
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+            disabled={loading || !input.trim()}
+            onClick={handleSend}
+          >
+            Send
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
