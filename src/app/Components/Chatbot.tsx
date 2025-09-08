@@ -9,12 +9,10 @@ export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<"chat" | "schedule">("chat");
 
-  // Mock scheduled posts
   const [scheduledPosts] = useState<ScheduledPost[]>([
     {
       id: "1",
@@ -58,15 +56,6 @@ export default function ChatBot() {
     }
   }, [input]);
 
-  // Clear error after 5s
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  // Add message
   const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
     const newMessage = {
       id: crypto.randomUUID(),
@@ -92,11 +81,10 @@ export default function ChatBot() {
     addMessage({ sender: "user", content: userInput });
     setInput("");
     setLoading(true);
-    setError(null);
     setIsTyping(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate typing delay
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // simulate typing delay
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -104,10 +92,17 @@ export default function ChatBot() {
         body: JSON.stringify({ prompt: userInput }),
       });
 
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+
+      // Show backend errors directly in the message bubble
+      if (!res.ok || data.error) {
+        addMessage({
+          sender: "ai",
+          content: data.error || `Server responded with ${res.status}`,
+          status: "error",
+        });
+        return;
+      }
 
       addMessage({
         sender: "ai",
@@ -115,13 +110,12 @@ export default function ChatBot() {
         status: "pending",
         threadId: data.review?.threadId,
       });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to generate post";
-      setError(errorMessage);
+    } catch (err: any) {
       addMessage({
         sender: "ai",
-        content: "Sorry, I encountered an error processing your request.",
+        content:
+          err?.message ||
+          "Sorry, I encountered an error processing your request.",
         status: "error",
       });
     } finally {
@@ -143,12 +137,27 @@ export default function ChatBot() {
         body: JSON.stringify({ post: draft.content, threadId: draft.threadId }),
       });
 
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        updateMessageStatus(id, "error");
+        addMessage({
+          sender: "ai",
+          content: data.error || `Server responded with ${res.status}`,
+          status: "error",
+        });
+        return;
+      }
 
       updateMessageStatus(id, "posted");
-    } catch {
+    } catch (err: any) {
       updateMessageStatus(id, "error");
-      setError("Failed to post message. Please try again.");
+      addMessage({
+        sender: "ai",
+        content:
+          err?.message || "Failed to post message. Please try again later.",
+        status: "error",
+      });
     }
   };
 
@@ -166,17 +175,14 @@ export default function ChatBot() {
   const clearChat = () => {
     if (confirm("Are you sure you want to clear the conversation?")) {
       setMessages([]);
-      setError(null);
     }
   };
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
-
   const handleViewSchedule = () => {
     setView("schedule");
     setSidebarOpen(false);
   };
-
   const handleBackToChat = () => setView("chat");
 
   if (view === "schedule") {
@@ -189,11 +195,22 @@ export default function ChatBot() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900">
+    <div className="flex h-screen w-full bg-gray-850">
+      {/* Sidebar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onViewSchedule={handleViewSchedule}
+      />
+
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col relative">
+      <div
+        className={`flex-1 flex flex-col relative transition-all duration-300 ${
+          sidebarOpen ? "md:ml-64" : ""
+        }`}
+      >
         {/* Header */}
-        <div className="p-4 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-b border-gray-700/50">
+        <div className="p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 z-10 sticky top-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -228,24 +245,8 @@ export default function ChatBot() {
           </div>
         </div>
 
-        {/* Error Banner */}
-        {error && (
-          <div className="bg-rose-900/50 text-rose-100 px-4 py-2 text-sm flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span>⚠️</span>
-              <span>{error}</span>
-            </div>
-            <button
-              onClick={() => setError(null)}
-              className="text-rose-200 hover:text-white"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
         {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
+        <div className="flex-1 overflow-y-auto p-4 pb-40 space-y-6 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-white/60">
               <div className="text-center max-w-md mb-8">
@@ -281,7 +282,7 @@ export default function ChatBot() {
 
           {isTyping && (
             <div className="flex justify-start">
-              <div className="max-w-[80%] rounded-2xl p-4 bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50">
+              <div className="max-w-full sm:max-w-[80%] rounded-2xl p-4 bg-gray-800/80 text-white backdrop-blur-sm border border-gray-700/50">
                 <div className="flex items-center gap-2 text-white/70">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce"></div>
@@ -299,15 +300,16 @@ export default function ChatBot() {
               </div>
             </div>
           )}
+
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Unified Input Area */}
-        <div className="w-full max-w-2xl fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4">
-          <div className="flex items-end gap-2 rounded-3xl p-3 bg-gray-800/30 backdrop-blur-sm">
+        {/* Input Area */}
+        <div className="w-full max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-4 pb-4 z-20">
+          <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-800/30 text-white placeholder-gray-400"
+              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900/90 text-white placeholder-white/60"
               placeholder="Instruct SaMMy..."
               rows={1}
               value={input}
@@ -315,6 +317,7 @@ export default function ChatBot() {
               onKeyDown={handleKeyDown}
               disabled={loading}
             />
+
             <button
               className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
               disabled={loading || !input.trim()}
@@ -332,13 +335,6 @@ export default function ChatBot() {
           </div>
         </div>
       </div>
-
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        onViewSchedule={handleViewSchedule}
-      />
     </div>
   );
 }
