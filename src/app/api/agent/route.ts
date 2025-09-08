@@ -24,7 +24,25 @@ export interface GraphState {
   result?: any;
 }
 
-// === Define Nodes ===
+// === Platform Detection Helper ===
+function detectPlatform(prompt: string, platform?: string): string | null {
+  const normalized = (platform || prompt || "").toLowerCase();
+
+  if (normalized.includes("twitter") || normalized.includes("x")) {
+    return "twitter";
+  }
+  if (
+    normalized.includes("facebook") ||
+    normalized.includes("instagram") ||
+    normalized.includes("tiktok") ||
+    normalized.includes("linkedin")
+  ) {
+    return "unsupported";
+  }
+  return null; // no platform detected
+}
+
+// === Nodes ===
 
 // Node 1: Generate AI post
 async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
@@ -63,18 +81,18 @@ async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
     messages: [
       {
         role: "system",
-        content: "You are an internal posting expert.",
+        content:
+          "You are an expert at writing concise, professional social media posts. Always write as if posting directly to the specified platform.",
       },
       {
         role: "user",
-        content: `You are an internal communications and posting expert. Write a concise professional Post. Context:\n${context}\nUser request:\n${prompt}`,
+        content: `Make a post for Twitter/X.\n\nContext from database:\n${context}\n\nUser request:\n${prompt}`,
       },
     ],
     max_tokens: 250,
   });
 
   const postText = completion.choices[0].message?.content ?? "";
-  console.log(postText);
 
   return {
     post: postText,
@@ -130,14 +148,31 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt, platform } = await req.json();
 
-    if (!prompt || !platform) {
+    const detectedPlatform = detectPlatform(prompt, platform);
+
+    if (!detectedPlatform) {
       return NextResponse.json(
-        { success: false, error: "Missing 'prompt' or 'platform'" },
+        {
+          success: false,
+          error:
+            "No supported platform detected. Please specify one (e.g., Twitter/X).",
+        },
         { status: 400 }
       );
     }
 
-    const result = await generateApp.invoke({ prompt, platform });
+    if (detectedPlatform === "unsupported") {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This platform is not supported yet. Currently only Twitter/X is supported.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const result = await generateApp.invoke({ prompt, platform: "twitter" });
 
     // Return only the draft for review
     return NextResponse.json({ success: true, review: result });
@@ -152,14 +187,35 @@ export async function PUT(req: NextRequest) {
   try {
     const { post, platform, threadId } = await req.json();
 
-    if (!post || !platform || !threadId) {
+    const detectedPlatform = detectPlatform(post, platform);
+
+    if (!detectedPlatform) {
       return NextResponse.json(
-        { success: false, error: "Missing 'post', 'platform' or 'threadId'" },
+        {
+          success: false,
+          error:
+            "No supported platform detected. Please specify one (e.g., Twitter/X).",
+        },
         { status: 400 }
       );
     }
 
-    const result = await postApp.invoke({ post, platform, threadId });
+    if (detectedPlatform === "unsupported") {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "This platform is not supported yet. Currently only Twitter/X is supported.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const result = await postApp.invoke({
+      post,
+      platform: "twitter",
+      threadId,
+    });
 
     return NextResponse.json({ success: true, result });
   } catch (err: any) {

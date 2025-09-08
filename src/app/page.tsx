@@ -197,17 +197,21 @@ export default function ChatBot() {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userInput, platform: "twitter" }),
+        // ✅ only send prompt, backend detects platform
+        body: JSON.stringify({ prompt: userInput }),
       });
-
-      if (!res.ok) {
-        throw new Error(`Server responded with ${res.status}`);
-      }
 
       const data = await res.json();
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (!res.ok || data.error) {
+        const errorMessage =
+          data.error || `Server responded with ${res.status}`;
+        addMessage({
+          sender: "ai",
+          content: errorMessage,
+          status: "error",
+        });
+        return;
       }
 
       addMessage({
@@ -222,7 +226,7 @@ export default function ChatBot() {
       setError(errorMessage);
       addMessage({
         sender: "ai",
-        content: "Sorry, I encountered an error processing your request.",
+        content: errorMessage,
         status: "error",
       });
     } finally {
@@ -242,15 +246,19 @@ export default function ChatBot() {
       const res = await fetch("/api/agent", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        // ✅ drop hardcoded twitter, backend detects
         body: JSON.stringify({
           post: draft.content,
-          platform: "twitter",
           threadId: draft.threadId,
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Server responded with ${res.status}`);
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        updateMessageStatus(id, "error");
+        setError(data.error || `Server responded with ${res.status}`);
+        return;
       }
 
       updateMessageStatus(id, "posted");
