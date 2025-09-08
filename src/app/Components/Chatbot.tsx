@@ -1,11 +1,5 @@
 "use client";
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  Component,
-} from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Message, ScheduledPost } from "../Types";
 import ScheduledPostView from "../Components/ScheduledPostView";
 import MessageBubble from "../Components/MessageBubble";
@@ -20,13 +14,13 @@ export default function ChatBot() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<"chat" | "schedule">("chat");
 
-  // Mock scheduled posts data
+  // Mock scheduled posts
   const [scheduledPosts] = useState<ScheduledPost[]>([
     {
       id: "1",
       content:
         "Just launched our new product! Check it out at our website. #innovation #tech",
-      timestamp: Date.now() + 2 * 60 * 60 * 1000, // 2 hours from now
+      timestamp: Date.now() + 2 * 60 * 60 * 1000,
       platform: "Twitter",
       status: "scheduled",
     },
@@ -34,7 +28,7 @@ export default function ChatBot() {
       id: "2",
       content:
         "Exploring the future of AI in creative industries. What are your thoughts?",
-      timestamp: Date.now() + 24 * 60 * 60 * 1000, // 1 day from now
+      timestamp: Date.now() + 24 * 60 * 60 * 1000,
       platform: "LinkedIn",
       status: "scheduled",
     },
@@ -43,18 +37,17 @@ export default function ChatBot() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Get the latest AI message ID for animation purposes
   const latestAiMessageId = messages
     .filter((msg) => msg.sender === "ai")
     .map((msg) => msg.id)
     .pop();
 
-  // Auto-scroll to bottom when messages change
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea based on content
+  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -65,7 +58,7 @@ export default function ChatBot() {
     }
   }, [input]);
 
-  // Clear error after 5 seconds
+  // Clear error after 5s
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => setError(null), 5000);
@@ -73,7 +66,7 @@ export default function ChatBot() {
     }
   }, [error]);
 
-  // Message handlers
+  // Add message
   const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
     const newMessage = {
       id: crypto.randomUUID(),
@@ -103,8 +96,7 @@ export default function ChatBot() {
     setIsTyping(true);
 
     try {
-      // Simulate typing delay for better UX
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate typing delay
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -112,15 +104,10 @@ export default function ChatBot() {
         body: JSON.stringify({ prompt: userInput }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Server responded with ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
 
       const data = await res.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      if (data.error) throw new Error(data.error);
 
       addMessage({
         sender: "ai",
@@ -145,7 +132,6 @@ export default function ChatBot() {
 
   const handleApproveDraft = async (id: string) => {
     const draft = messages.find((msg) => msg.id === id);
-
     if (!draft || draft.status !== "pending" || !draft.threadId) return;
 
     updateMessageStatus(id, "posting");
@@ -154,15 +140,10 @@ export default function ChatBot() {
       const res = await fetch("/api/agent", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          post: draft.content,
-          threadId: draft.threadId,
-        }),
+        body: JSON.stringify({ post: draft.content, threadId: draft.threadId }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Server responded with ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
 
       updateMessageStatus(id, "posted");
     } catch {
@@ -189,18 +170,14 @@ export default function ChatBot() {
     }
   };
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const handleViewSchedule = () => {
     setView("schedule");
     setSidebarOpen(false);
   };
 
-  const handleBackToChat = () => {
-    setView("chat");
-  };
+  const handleBackToChat = () => setView("chat");
 
   if (view === "schedule") {
     return (
@@ -269,132 +246,91 @@ export default function ChatBot() {
 
         {/* Messages Container */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
-          {messages.length === 0 ? (
+          {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-white/60">
               <div className="text-center max-w-md mb-8">
                 <div className="text-4xl mb-4">🤖</div>
                 <h2 className="text-2xl font-extrabold mb-4">
                   What do you want to post about?
                 </h2>
-
                 <div className="p-4 rounded-xl text-left backdrop-blur-sm">
                   <p className="text-xs font-medium mb-2 text-gray-400">
                     Try asking me:
                   </p>
                   <ul className="text-xs space-y-1 text-gray-400">
-                    <li className="flex items-center gap-2">
-                      • "Create a tweet about luanching our new branch"
-                    </li>
-                    <li className="flex items-center gap-2">
-                      • "Write a linkedin post about our opened intake"
-                    </li>
-                    <li className="flex items-center gap-2">
+                    <li>• "Create a tweet about launching our new branch"</li>
+                    <li>• "Write a linkedin post about our opened intake"</li>
+                    <li>
                       • "Draft a facebook promotional post for my product"
                     </li>
                   </ul>
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Centered Input Area for empty state */}
-              <div className="w-full max-w-2xl fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4">
-                <div className="flex items-end gap-2 rounded-3xl p-3">
-                  <textarea
-                    ref={textareaRef}
-                    className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm 
-      bg-gray-800/30 text-white placeholder-gray-400"
-                    placeholder="Instruct SaMMy..."
-                    rows={1}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    disabled={loading}
-                  />
-                  <button
-                    className="bg-gray-800/30 text-white px-5 py-3 rounded-full hover:bg-gray-700/40 transition-all 
-      disabled:opacity-50 flex items-center justify-center min-w-[90px]"
-                    disabled={loading || !input.trim()}
-                    onClick={sendMessage}
-                  >
-                    {loading ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <span>Send</span>
-                        <span className="text-xs">⏎</span>
-                      </div>
-                    )}
-                  </button>
+          {messages.map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              onApprove={handleApproveDraft}
+              onReject={handleRejectDraft}
+              isLatestAiMessage={msg.id === latestAiMessageId}
+            />
+          ))}
+
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-2xl p-4 bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50">
+                <div className="flex items-center gap-2 text-white/70">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.4s" }}
+                    ></div>
+                  </div>
+                  <span className="text-sm">SaMMy is thinking...</span>
                 </div>
               </div>
             </div>
-          ) : (
-            <>
-              {messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg}
-                  onApprove={handleApproveDraft}
-                  onReject={handleRejectDraft}
-                  isLatestAiMessage={msg.id === latestAiMessageId}
-                />
-              ))}
-
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] rounded-2xl p-4 bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50">
-                    <div className="flex items-center gap-2 text-white/70">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce"></div>
-                        <div
-                          className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.2s" }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.4s" }}
-                        ></div>
-                      </div>
-                      <span className="text-sm">SaMMy is thinking...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area (shown only when there are messages) */}
-        {messages.length > 0 && (
-          <div className="p-4 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-t border-gray-700/50">
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={textareaRef}
-                className="flex-1 border border-gray-700/50 rounded-xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-800/30 text-white placeholder-gray-400 backdrop-blur-sm"
-                placeholder="Message SaMMy... (Press Enter to send, Shift+Enter for new line)"
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={loading}
-              />
-              <button
-                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md backdrop-blur-sm"
-                disabled={loading || !input.trim()}
-                onClick={sendMessage}
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <span>Send</span>
-                    <span className="text-xs">⏎</span>
-                  </div>
-                )}
-              </button>
-            </div>
+        {/* Unified Input Area */}
+        <div className="w-full max-w-2xl fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4">
+          <div className="flex items-end gap-2 rounded-3xl p-3 bg-gray-800/30 backdrop-blur-sm">
+            <textarea
+              ref={textareaRef}
+              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-800/30 text-white placeholder-gray-400"
+              placeholder="Instruct SaMMy..."
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+            />
+            <button
+              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
+              disabled={loading || !input.trim()}
+              onClick={sendMessage}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <div className="flex items-center gap-1">
+                  <span>Send</span>
+                  <span className="text-xs">⏎</span>
+                </div>
+              )}
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Sidebar */}
