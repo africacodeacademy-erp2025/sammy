@@ -11,6 +11,14 @@ interface Message {
   timestamp: number;
 }
 
+interface ScheduledPost {
+  id: string;
+  content: string;
+  timestamp: number;
+  platform: string;
+  status: "scheduled" | "posted" | "canceled";
+}
+
 interface MessageBubbleProps {
   message: Message;
   onApprove: (id: string) => void;
@@ -111,17 +119,13 @@ function MessageBubble({ message, onApprove, onReject, isLatestAiMessage }: Mess
 // Sidebar Component
 function Sidebar({ 
   isOpen, 
-  onClose, 
-  messages 
+  onClose,
+  onViewSchedule
 }: { 
   isOpen: boolean; 
-  onClose: () => void; 
-  messages: Message[]; 
+  onClose: () => void;
+  onViewSchedule: () => void;
 }) {
-  const postedPosts = messages.filter(msg => msg.status === "posted");
-  const rejectedPosts = messages.filter(msg => msg.status === "rejected");
-  const pendingPosts = messages.filter(msg => msg.status === "pending");
-
   return (
     <>
       {/* Overlay */}
@@ -134,13 +138,13 @@ function Sidebar({
       
       {/* Sidebar */}
       <div className={`
-        fixed top-0 left-0 h-full w-80 bg-gray-900/95 backdrop-blur-xl border-r border-gray-700/50
+        fixed top-0 right-0 h-full w-80 bg-gray-900/95 backdrop-blur-xl border-l border-gray-700/50
         transform transition-transform duration-300 z-50 shadow-2xl
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${isOpen ? 'translate-x-0' : 'translate-x-full'}
       `}>
         <div className="p-4 border-b border-gray-700/50">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Content Manager</h2>
+            <h2 className="text-lg font-semibold text-white">Settings</h2>
             <button 
               onClick={onClose}
               className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700/50"
@@ -151,68 +155,137 @@ function Sidebar({
         </div>
 
         <div className="p-4 space-y-6 overflow-y-auto h-[calc(100%-4rem)]">
-          {/* Pending Posts */}
-          <div>
-            <h3 className="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
-              <span>⏳</span> Pending ({pendingPosts.length})
-            </h3>
-            <div className="space-y-2">
-              {pendingPosts.slice().reverse().map(post => (
-                <div key={post.id} className="bg-gray-800/50 rounded-lg p-3 text-sm">
-                  <p className="text-white/90 line-clamp-2">{post.content}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {new Date(post.timestamp).toLocaleTimeString()}
-                  </p>
+          <div className="space-y-4">
+            <button
+              onClick={onViewSchedule}
+              className="w-full flex items-center justify-between p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-600/20 rounded-lg">
+                  <span className="text-blue-400">📅</span>
                 </div>
-              ))}
-              {pendingPosts.length === 0 && (
-                <p className="text-gray-400 text-sm">No pending posts</p>
-              )}
-            </div>
-          </div>
+                <div className="text-left">
+                  <h3 className="text-sm font-medium text-white">View Schedule</h3>
+                  <p className="text-xs text-gray-400">See upcoming posts</p>
+                </div>
+              </div>
+              <span className="text-gray-400">→</span>
+            </button>
 
-          {/* Posted Posts */}
-          <div>
-            <h3 className="text-sm font-medium text-green-400 mb-3 flex items-center gap-2">
-              <span>✅</span> Posted ({postedPosts.length})
-            </h3>
-            <div className="space-y-2">
-              {postedPosts.slice().reverse().map(post => (
-                <div key={post.id} className="bg-gray-800/50 rounded-lg p-3 text-sm">
-                  <p className="text-white/90 line-clamp-2">{post.content}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {new Date(post.timestamp).toLocaleTimeString()}
-                  </p>
+            <div className="p-3 bg-gray-800/30 rounded-lg">
+              <h3 className="text-sm font-medium text-white mb-2">Preferences</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-300">Default Posting Tone</label>
+                  <select className="w-full mt-1 bg-gray-700/50 border border-gray-600/50 rounded px-2 py-1 text-xs text-white">
+                    <option>Professional</option>
+                    <option>Casual</option>
+                    <option>Humorous</option>
+                    <option>Informative</option>
+                  </select>
                 </div>
-              ))}
-              {postedPosts.length === 0 && (
-                <p className="text-gray-400 text-sm">No posts yet</p>
-              )}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-300">Auto-post approved content</span>
+                  <div className="relative inline-block w-10 h-5">
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                    />
+                    <div className="block w-10 h-5 rounded-full bg-gray-600" />
+                    <div className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full" />
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Rejected Posts */}
-          <div>
-            <h3 className="text-sm font-medium text-rose-400 mb-3 flex items-center gap-2">
-              <span>❌</span> Rejected ({rejectedPosts.length})
-            </h3>
-            <div className="space-y-2">
-              {rejectedPosts.slice().reverse().map(post => (
-                <div key={post.id} className="bg-gray-800/50 rounded-lg p-3 text-sm">
-                  <p className="text-white/90 line-clamp-2">{post.content}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {new Date(post.timestamp).toLocaleTimeString()}
-                  </p>
-                </div>
-              ))}
-              {rejectedPosts.length === 0 && (
-                <p className="text-gray-400 text-sm">No rejected posts</p>
-              )}
+            <div className="p-3 bg-gray-800/30 rounded-lg">
+              <h3 className="text-sm font-medium text-white mb-2">App Info</h3>
+              <div className="text-xs text-gray-300 space-y-2">
+                <p>SaMMy will post to the platform specified in your prompt.</p>
+                <p>Just mention the platform name (Twitter, Instagram, etc.) in your request.</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+// ScheduledPostsView Component
+function ScheduledPostsView({ 
+  onBack,
+  scheduledPosts 
+}: { 
+  onBack: () => void;
+  scheduledPosts: ScheduledPost[];
+}) {
+  return (
+    <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900">
+      {/* Header */}
+      <div className="p-4 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-b border-gray-700/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors"
+            >
+              ←
+            </button>
+            <div>
+              <h1 className="font-bold text-white">Scheduled Posts</h1>
+              <p className="text-xs text-white/60">Upcoming content</p>
+            </div>
+          </div>
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {scheduledPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-white/60">
+            <div className="text-center max-w-md">
+              <div className="text-4xl mb-4">📅</div>
+              <h2 className="text-xl font-semibold mb-2">No scheduled posts</h2>
+              <p className="text-sm">You don't have any posts scheduled yet.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {scheduledPosts.map((post) => (
+              <div key={post.id} className="bg-gray-800/50 rounded-xl p-4 backdrop-blur-sm border border-gray-700/50">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full">
+                    {post.platform}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(post.timestamp).toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-white/90 text-sm">{post.content}</p>
+                <div className="flex justify-between items-center mt-3">
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    post.status === 'scheduled' 
+                      ? 'bg-amber-500/20 text-amber-300' 
+                      : post.status === 'posted'
+                      ? 'bg-green-500/20 text-green-300'
+                      : 'bg-rose-500/20 text-rose-300'
+                  }`}>
+                    {post.status}
+                  </span>
+                  {post.status === 'scheduled' && (
+                    <button className="text-xs text-rose-400 hover:text-rose-300">
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -224,6 +297,25 @@ export default function ChatBot() {
   const [error, setError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [view, setView] = useState<'chat' | 'schedule'>('chat');
+  
+  // Mock scheduled posts data
+  const [scheduledPosts] = useState<ScheduledPost[]>([
+    {
+      id: '1',
+      content: "Just launched our new product! Check it out at our website. #innovation #tech",
+      timestamp: Date.now() + 2 * 60 * 60 * 1000, // 2 hours from now
+      platform: 'Twitter',
+      status: 'scheduled'
+    },
+    {
+      id: '2',
+      content: "Exploring the future of AI in creative industries. What are your thoughts?",
+      timestamp: Date.now() + 24 * 60 * 60 * 1000, // 1 day from now
+      platform: 'LinkedIn',
+      status: 'scheduled'
+    }
+  ]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -288,7 +380,7 @@ export default function ChatBot() {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userInput, platform: "twitter" }),
+        body: JSON.stringify({ prompt: userInput }),
       });
 
       if (!res.ok) {
@@ -334,7 +426,6 @@ export default function ChatBot() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post: draft.content,
-          platform: "twitter",
           threadId: draft.threadId,
         }),
       });
@@ -372,33 +463,32 @@ export default function ChatBot() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleViewSchedule = () => {
+    setView('schedule');
+    setSidebarOpen(false);
+  };
+
+  const handleBackToChat = () => {
+    setView('chat');
+  };
+
+  if (view === 'schedule') {
+    return <ScheduledPostsView onBack={handleBackToChat} scheduledPosts={scheduledPosts} />;
+  }
+
   return (
     <div className="flex h-screen w-full bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900">
-      {/* Sidebar - Now on the left side */}
-      <Sidebar 
-        isOpen={sidebarOpen} 
-        onClose={() => setSidebarOpen(false)} 
-        messages={messages} 
-      />
-
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative">
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-b border-gray-700/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button
-                onClick={toggleSidebar}
-                className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
-              >
-                <span>📊</span>
-                <span className="text-xs">Posts ({messages.filter(m => m.status && ['posted', 'rejected', 'pending'].includes(m.status)).length})</span>
-              </button>
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-sm">S</span>
               </div>
               <div>
-                <h1 className="font-bold text-white">SaMMy AI Assistant</h1>
+                <h1 className="font-bold text-white">SaMMy</h1>
                 <p className="text-xs text-white/60">Social Media Content Generator</p>
               </div>
             </div>
@@ -412,6 +502,13 @@ export default function ChatBot() {
                   Clear Chat
                 </button>
               )}
+              <button
+                onClick={toggleSidebar}
+                className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
+              >
+                <span>⚙️</span>
+                <span className="text-xs">Settings</span>
+              </button>
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
             </div>
           </div>
@@ -433,18 +530,48 @@ export default function ChatBot() {
         {/* Messages Container */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-white/60">
-              <div className="text-center max-w-md">
+            <div className="flex flex-col items-center justify-center h-full text-white/60">
+              <div className="text-center max-w-md mb-8">
                 <div className="text-4xl mb-4">🤖</div>
                 <h2 className="text-xl font-semibold mb-2">Welcome to SaMMy!</h2>
-                <p className="text-sm mb-6">I&apos;m your AI social media assistant. I can help you create and post engaging content across multiple platforms.</p>
+                <p className="text-sm mb-6">I'm your AI social media assistant. I can help you create and post engaging content across multiple platforms.</p>
                 <div className="bg-gray-800/50 p-4 rounded-xl text-left backdrop-blur-sm">
                   <p className="text-xs font-medium mb-2">Try asking me:</p>
                   <ul className="text-xs space-y-1">
-                    <li className="flex items-center gap-2">• &quot;Create a tweet about AI advancements&quot;</li>
-                    <li className="flex items-center gap-2">• &quot;Write a thread about climate change&quot;</li>
-                    <li className="flex items-center gap-2">• &quot;Draft a promotional post for my product&quot;</li>
+                    <li className="flex items-center gap-2">• "Create a tweet about AI advancements"</li>
+                    <li className="flex items-center gap-2">• "Write a thread about climate change"</li>
+                    <li className="flex items-center gap-2">• "Draft a promotional post for my product"</li>
                   </ul>
+                </div>
+              </div>
+              
+              {/* Centered Input Area for empty state */}
+              <div className="w-full max-w-2xl fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4">
+                <div className="flex items-end gap-2 bg-gray-800/30 backdrop-blur-xl rounded-xl p-3 border border-gray-700/50">
+                  <textarea
+                    ref={textareaRef}
+                    className="flex-1 border border-gray-700/50 rounded-lg px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-800/30 text-white placeholder-gray-400"
+                    placeholder="Message SaMMy... (Press Enter to send, Shift+Enter for new line)"
+                    rows={1}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={loading}
+                  />
+                  <button
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-lg hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px]"
+                    disabled={loading || !input.trim()}
+                    onClick={sendMessage}
+                  >
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span>Send</span>
+                        <span className="text-xs">⏎</span>
+                      </div>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>
@@ -479,36 +606,45 @@ export default function ChatBot() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-t border-gray-700/50">
-          <div className="flex items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              className="flex-1 border border-gray-700/50 rounded-xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-800/30 text-white placeholder-gray-400 backdrop-blur-sm"
-              placeholder="Message SaMMy... (Press Enter to send, Shift+Enter for new line)"
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-            />
-            <button
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md backdrop-blur-sm"
-              disabled={loading || !input.trim()}
-              onClick={sendMessage}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span>Send</span>
-                  <span className="text-xs">⏎</span>
-                </div>
-              )}
-            </button>
+        {/* Input Area (shown only when there are messages) */}
+        {messages.length > 0 && (
+          <div className="p-4 bg-gradient-to-r from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-t border-gray-700/50">
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={textareaRef}
+                className="flex-1 border border-gray-700/50 rounded-xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-800/30 text-white placeholder-gray-400 backdrop-blur-sm"
+                placeholder="Message SaMMy... (Press Enter to send, Shift+Enter for new line)"
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+              />
+              <button
+                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md backdrop-blur-sm"
+                disabled={loading || !input.trim()}
+                onClick={sendMessage}
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span>Send</span>
+                    <span className="text-xs">⏎</span>
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Sidebar */}
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)}
+        onViewSchedule={handleViewSchedule}
+      />
     </div>
   );
 }
