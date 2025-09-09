@@ -195,7 +195,7 @@ export default function ChatBot() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-gray-850">
+    <div className="flex h-screen w-full bg-gray-950">
       {/* Sidebar */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -237,8 +237,8 @@ export default function ChatBot() {
                 onClick={toggleSidebar}
                 className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
-                <span>⚙️</span>
-                <span className="text-xs">Settings</span>
+                <span>☰</span>
+                
               </button>
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
             </div>

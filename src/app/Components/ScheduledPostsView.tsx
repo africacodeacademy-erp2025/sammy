@@ -86,7 +86,7 @@ export default function ScheduledPostView({
   ];
 
   return (
-    <div className="flex h-screen w-full bg-gray-850">
+    <div className="flex h-screen w-full bg-gray-950">
       {/* Sidebar */}
       <div className="w-80 bg-gray-900/90 backdrop-blur-xl border-r border-gray-700/50 flex flex-col">
         {/* Header */}
