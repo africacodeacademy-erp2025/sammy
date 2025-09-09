@@ -7,7 +7,7 @@ import { GraphState } from "../../src/app/api/agent/route";
 export async function twitterPosting(
   state: GraphState
 ): Promise<Partial<GraphState>> {
-  const { post, threadId } = state;
+  const { post, platform, threadId } = state;
 
   if (!post) {
     throw new Error("Missing 'post' in state");
@@ -15,6 +15,7 @@ export async function twitterPosting(
 
   console.log("📡 Sending post to Twitter/X endpoint:", {
     post,
+    platform,
     threadId,
   });
 
@@ -23,7 +24,7 @@ export async function twitterPosting(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ post }),
+      body: JSON.stringify({ post, platform }),
     }
   );
 

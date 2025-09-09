@@ -106,8 +106,8 @@ export default function ChatBot() {
 
       addMessage({
         sender: "ai",
-        content: data.review?.post || "No response generated",
-        status: "pending",
+        content: data.review?.post || data.message,
+        status: data.message ? "scheduled" : "pending",
         threadId: data.review?.threadId,
       });
     } catch (err: any) {

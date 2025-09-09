@@ -22,6 +22,7 @@ export interface GraphState {
   post?: string;
   threadId?: string;
   result?: any;
+  scheduleTime?: string | null;
 }
 
 // === Platform Detection Helper ===
@@ -39,13 +40,67 @@ function detectPlatform(prompt: string, platform?: string): string | null {
   ) {
     return "unsupported";
   }
-  return null; // no platform detected
+  return null;
+}
+
+// === Helper: Validate ISO string ===
+function isValidISODate(dateString: string): boolean {
+  const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+  return isoRegex.test(dateString);
 }
 
 // === Nodes ===
 
-// Node 1: Generate AI post
-async function generatePost(state: GraphState): Promise<Partial<GraphState>> {
+// Node 1: Extract schedule time from prompt
+async function extractScheduleTime(
+  state: GraphState
+): Promise<Partial<GraphState>> {
+  const { prompt } = state;
+
+  const now = new Date().toISOString();
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `You are a time-normalization assistant. 
+The current UTC datetime is ${now}.
+Return a JSON object with key "scheduleTime".
+- If the user specifies a relative time like "today" or "tomorrow", resolve it relative to the current UTC datetime.
+- Output ISO 8601 UTC datetime (YYYY-MM-DDTHH:mm:ssZ).
+- If no time is found, set "scheduleTime" to null.`,
+      },
+      { role: "user", content: prompt },
+    ],
+    max_tokens: 50,
+  });
+
+  let scheduleTime: string | null = null;
+
+  try {
+    const raw = completion.choices[0].message?.content ?? "{}";
+    const parsed = JSON.parse(raw);
+
+    if (
+      parsed.scheduleTime &&
+      typeof parsed.scheduleTime === "string" &&
+      isValidISODate(parsed.scheduleTime)
+    ) {
+      scheduleTime = parsed.scheduleTime;
+    }
+  } catch (err) {
+    console.error("Failed to parse scheduleTime:", err);
+  }
+
+  return { scheduleTime };
+}
+
+// Node 2: Generate AI post (only if posting immediately)
+export async function generatePost(
+  state: GraphState
+): Promise<Partial<GraphState>> {
   const { prompt } = state;
   const db = await connectDB();
   const collection = db.collection("messages");
@@ -111,17 +166,23 @@ async function getEmbedding(text: string) {
 
 // === Build LangGraph Workflows ===
 
-// Workflow 1: Generate only (stops at END for human review)
+// Workflow 1: Extract time + optionally generate draft
 const generateWorkflow = new StateGraph<GraphState>({
   channels: {
     prompt: null,
     platform: null,
     post: null,
     threadId: null,
+    scheduleTime: null,
   },
 });
+
+generateWorkflow.addNode("extractScheduleTime", extractScheduleTime);
 generateWorkflow.addNode("generatePost", generatePost);
-generateWorkflow.addEdge(START, "generatePost" as any);
+generateWorkflow.addEdge(START, "extractScheduleTime" as any);
+generateWorkflow.addConditionalEdges("extractScheduleTime" as any, (state) =>
+  state.scheduleTime ? "END" : "generatePost"
+);
 generateWorkflow.addEdge("generatePost" as any, END);
 
 const generateApp = generateWorkflow.compile();
@@ -143,7 +204,7 @@ const postApp = postWorkflow.compile();
 
 // === API Entry Points ===
 
-// Step 1: Generate post → return to UI for human approval
+// Step 1: Generate or schedule
 export async function POST(req: NextRequest) {
   try {
     const { prompt, platform } = await req.json();
@@ -174,8 +235,35 @@ export async function POST(req: NextRequest) {
 
     const result = await generateApp.invoke({ prompt, platform: "twitter" });
 
-    // Return only the draft for review
-    return NextResponse.json({ success: true, review: result });
+    const db = await connectDB();
+    const scheduledPosts = db.collection("scheduledPosts");
+
+    if (result.scheduleTime) {
+      await scheduledPosts.insertOne({
+        prompt,
+        platform: detectedPlatform,
+        scheduleTime: result.scheduleTime,
+        status: "scheduled",
+        createdAt: new Date(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        scheduled: true,
+        message: `Post scheduled for ${result.scheduleTime}`,
+      });
+    }
+
+    // If not scheduled, return draft for immediate review
+    return NextResponse.json({
+      success: true,
+      review: {
+        post: result.post,
+        threadId: result.threadId,
+        platform: result.platform,
+        scheduleTime: null,
+      },
+    });
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ success: false, error: err.message });

@@ -4,7 +4,13 @@ export interface Message {
   id: string;
   sender: "user" | "ai";
   content: string;
-  status?: "pending" | "posting" | "posted" | "error" | "rejected";
+  status?:
+    | "pending"
+    | "posting"
+    | "posted"
+    | "error"
+    | "rejected"
+    | "scheduled";
   threadId?: string;
   timestamp: number;
 }
