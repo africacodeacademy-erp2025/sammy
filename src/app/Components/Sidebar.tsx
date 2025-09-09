@@ -1,3 +1,4 @@
+// src/app/Components/Sidebar.tsx
 "use client";
 
 export default function Sidebar({
@@ -26,10 +27,15 @@ export default function Sidebar({
         transform transition-transform duration-300 z-50 shadow-2xl
         ${isOpen ? "translate-x-0" : "translate-x-full"}
       `}
+        aria-hidden={!isOpen}
+        data-testid="sidebar-root"
+        role="complementary"
       >
-        <div className="p-4 border-b border-gray-700/50">
+        <div className="p-4 border-b border-gray-700/50" data-testid="sidebar-header">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">Settings</h2>
+            <div className={`${isOpen ? "translate-x-0" : "translate-x-full"}`}>
+              <h2 className="text-lg font-semibold text-white">Settings</h2>
+            </div>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700/50"

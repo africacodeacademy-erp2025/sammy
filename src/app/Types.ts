@@ -1,4 +1,4 @@
-// types.ts
+// src/app/Types.ts
 
 export interface Message {
   id: string;
@@ -14,7 +14,7 @@ export interface ScheduledPost {
   content: string;
   timestamp: number;
   platform: string;
-  status: "scheduled" | "posted" | "canceled";
+  status: "scheduled" | "posted" | "canceled"| "failed";
 }
 
 export interface MessageBubbleProps {

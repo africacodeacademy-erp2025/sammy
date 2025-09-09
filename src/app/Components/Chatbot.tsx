@@ -1,3 +1,4 @@
+// src/app/Components/Chatbot.tsx
 "use client";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Message, ScheduledPost } from "../Types";
@@ -34,6 +35,7 @@ export default function ChatBot() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const idCounterRef = useRef(0);
 
   const latestAiMessageId = messages
     .filter((msg) => msg.sender === "ai")
@@ -42,7 +44,10 @@ export default function ChatBot() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const node = messagesEndRef.current as unknown as { scrollIntoView?: (opts?: ScrollIntoViewOptions) => void } | null;
+    if (node && typeof node.scrollIntoView === "function") {
+      node.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   // Auto-resize textarea
@@ -58,7 +63,7 @@ export default function ChatBot() {
 
   const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
     const newMessage = {
-      id: crypto.randomUUID(),
+      id: `${crypto.randomUUID?.() ?? "id"}-${idCounterRef.current++}`,
       timestamp: Date.now(),
       ...msg,
     };
@@ -84,7 +89,7 @@ export default function ChatBot() {
     setIsTyping(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // simulate typing delay
+      await new Promise((resolve) => setTimeout(resolve, 100)); // simulate typing delay
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -110,11 +115,11 @@ export default function ChatBot() {
         status: "pending",
         threadId: data.review?.threadId,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       addMessage({
         sender: "ai",
         content:
-          err?.message ||
+          (err instanceof Error ? err.message : "An unknown error occurred") ||
           "Sorry, I encountered an error processing your request.",
         status: "error",
       });
@@ -150,12 +155,15 @@ export default function ChatBot() {
       }
 
       updateMessageStatus(id, "posted");
-    } catch (err: any) {
+    } catch (err: unknown) {
       updateMessageStatus(id, "error");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to post message. Please try again later.";
       addMessage({
         sender: "ai",
-        content:
-          err?.message || "Failed to post message. Please try again later.",
+        content: errorMessage,
         status: "error",
       });
     }
@@ -197,11 +205,13 @@ export default function ChatBot() {
   return (
     <div className="flex h-screen w-full bg-gray-850">
       {/* Sidebar */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        onViewSchedule={handleViewSchedule}
-      />
+      {sidebarOpen && (
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          onViewSchedule={handleViewSchedule}
+        />
+      )}
 
       {/* Main Chat Area */}
       <div
@@ -236,6 +246,7 @@ export default function ChatBot() {
               <button
                 onClick={toggleSidebar}
                 className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
+                aria-label="Settings"
               >
                 <span>⚙️</span>
                 <span className="text-xs">Settings</span>
@@ -259,10 +270,10 @@ export default function ChatBot() {
                     Try asking me:
                   </p>
                   <ul className="text-xs space-y-1 text-gray-400">
-                    <li>• "Create a tweet about launching our new branch"</li>
-                    <li>• "Write a linkedin post about our opened intake"</li>
+                    <li>• &quot;Create a tweet about launching our new branch&quot;</li>
+                    <li>• &quot;Write a linkedin post about our opened intake&quot;</li>
                     <li>
-                      • "Draft a facebook promotional post for my product"
+                      • &quot;Draft a facebook promotional post for my product&quot;
                     </li>
                   </ul>
                 </div>
@@ -270,9 +281,9 @@ export default function ChatBot() {
             </div>
           )}
 
-          {messages.map((msg) => (
+          {messages.map((msg, index) => (
             <MessageBubble
-              key={msg.id}
+              key={`${msg.id}-${index}`}
               message={msg}
               onApprove={handleApproveDraft}
               onReject={handleRejectDraft}
@@ -322,14 +333,15 @@ export default function ChatBot() {
               className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
               disabled={loading || !input.trim()}
               onClick={sendMessage}
+              data-testid="send-button"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <div className="flex items-center gap-1">
-                  <span>Send</span>
-                  <span className="text-xs">⏎</span>
-                </div>
+                <>
+                  Send
+                  <span className="text-xs ml-1">⏎</span>
+                </>
               )}
             </button>
           </div>

@@ -1,3 +1,4 @@
+// src/app/Components/ScheduledPostView.tsx
 "use client";
 import { ScheduledPost } from "../Types";
 
@@ -36,7 +37,7 @@ export default function ScheduledPostsView({
             <div className="text-center max-w-md">
               <div className="text-4xl mb-4">📅</div>
               <h2 className="text-xl font-semibold mb-2">No scheduled posts</h2>
-              <p className="text-sm">You don't have any posts scheduled yet.</p>
+              <p className="text-sm">You don&apos;t have any posts scheduled yet.</p>
             </div>
           </div>
         ) : (
@@ -51,7 +52,17 @@ export default function ScheduledPostsView({
                     {post.platform}
                   </span>
                   <span className="text-xs text-gray-400">
-                    {new Date(post.timestamp).toLocaleString()}
+                    {new Date(post.timestamp)
+                      .toLocaleString('en-US', {
+                        year: "numeric",
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: true,
+                      })
+                      .replace(/\s?(am|pm)$/i, (m) => ` ${m.trim().toUpperCase()}`)}
                   </span>
                 </div>
                 <p className="text-white/90 text-sm">{post.content}</p>

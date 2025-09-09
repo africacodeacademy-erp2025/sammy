@@ -1,6 +1,7 @@
+// src/app/Components/MessageBubble.tsx
 "use client";
+import React, { useEffect, useRef } from "react";
 import { MessageBubbleProps } from "../Types";
-import React, { useState, useEffect } from "react";
 
 export default function MessageBubble({
   message,
@@ -9,14 +10,23 @@ export default function MessageBubble({
   isLatestAiMessage,
 }: MessageBubbleProps) {
   const isUser = message.sender === "user";
-  const [isVisible, setIsVisible] = useState(false);
+  const contentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+    // Ensure initial state
     if (isLatestAiMessage) {
-      const timer = setTimeout(() => setIsVisible(true), 100);
+      node.classList.remove("opacity-100");
+      node.classList.add("opacity-0");
+      const timer = setTimeout(() => {
+        node.classList.remove("opacity-0");
+        node.classList.add("opacity-100");
+      }, 100);
       return () => clearTimeout(timer);
     } else {
-      setIsVisible(true);
+      node.classList.remove("opacity-0");
+      node.classList.add("opacity-100");
     }
   }, [isLatestAiMessage]);
 
@@ -69,9 +79,7 @@ export default function MessageBubble({
     <div
       className={`flex ${
         isUser ? "justify-end" : "justify-start"
-      } transition-all duration-300 ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
-      }`}
+      } transition-all duration-300`}
       style={{ transitionDelay: isLatestAiMessage ? "100ms" : "0ms" }}
     >
       <div
@@ -81,14 +89,15 @@ export default function MessageBubble({
             : "bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50"
         }`}
       >
-        <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        <div ref={contentRef} className="whitespace-pre-wrap break-words opacity-0">{message.content}</div>
 
         <div className="flex justify-between items-center mt-2">
           <div className="text-xs opacity-70">
             {new Date(message.timestamp).toLocaleTimeString([], {
-              hour: "2-digit",
+              hour: "numeric",
               minute: "2-digit",
-            })}
+              hour12: true,
+            }).replace(/\s?(am|pm)$/i, (m) => ` ${m.trim().toUpperCase()}`)}
           </div>
           <div className="text-xs opacity-50">{isUser ? "You" : "SaMMy"}</div>
         </div>
