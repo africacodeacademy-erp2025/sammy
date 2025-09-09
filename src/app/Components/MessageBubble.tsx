@@ -42,6 +42,9 @@ export default function MessageBubble({
         </div>
       </div>
     ),
+    scheduled: (
+      <div className="flex flex-col gap-2 mt-3 bg-black/20 rounded-lg border border-white/10"></div>
+    ),
     posting: (
       <div className="flex items-center gap-2 mt-2 text-xs text-amber-300 font-medium">
         <div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />

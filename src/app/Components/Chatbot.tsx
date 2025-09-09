@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Message, ScheduledPost } from "../Types";
-import ScheduledPostView from "../Components/ScheduledPostView";
+import ScheduledPostView from "./ScheduledPostsView";
 import MessageBubble from "../Components/MessageBubble";
 import Sidebar from "./Sidebar";
 
@@ -106,8 +106,8 @@ export default function ChatBot() {
 
       addMessage({
         sender: "ai",
-        content: data.review?.post || "No response generated",
-        status: "pending",
+        content: data.review?.post || data.message,
+        status: data.message ? "scheduled" : "pending",
         threadId: data.review?.threadId,
       });
     } catch (err: any) {
@@ -195,7 +195,7 @@ export default function ChatBot() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-gray-850">
+    <div className="flex h-screen w-full bg-gray-950">
       {/* Sidebar */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -237,8 +237,8 @@ export default function ChatBot() {
                 onClick={toggleSidebar}
                 className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
-                <span>⚙️</span>
-                <span className="text-xs">Settings</span>
+                <span>☰</span>
+                
               </button>
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
             </div>
