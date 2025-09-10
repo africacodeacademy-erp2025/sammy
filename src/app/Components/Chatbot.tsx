@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message, ScheduledPost } from "../Types";
+import { Message } from "../Types";
 import ScheduledPostView from "./ScheduledPostsView";
 import MessageBubble from "../Components/MessageBubble";
 import Sidebar from "./Sidebar";
@@ -12,25 +12,6 @@ export default function ChatBot() {
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState<"chat" | "schedule">("chat");
-
-  const [scheduledPosts] = useState<ScheduledPost[]>([
-    {
-      id: "1",
-      content:
-        "Just launched our new product! Check it out at our website. #innovation #tech",
-      timestamp: Date.now() + 2 * 60 * 60 * 1000,
-      platform: "Twitter",
-      status: "scheduled",
-    },
-    {
-      id: "2",
-      content:
-        "Exploring the future of AI in creative industries. What are your thoughts?",
-      timestamp: Date.now() + 24 * 60 * 60 * 1000,
-      platform: "LinkedIn",
-      status: "scheduled",
-    },
-  ]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -186,12 +167,7 @@ export default function ChatBot() {
   const handleBackToChat = () => setView("chat");
 
   if (view === "schedule") {
-    return (
-      <ScheduledPostView
-        onBack={handleBackToChat}
-        scheduledPosts={scheduledPosts}
-      />
-    );
+    return <ScheduledPostView onBack={handleBackToChat} />;
   }
 
   return (
@@ -238,7 +214,6 @@ export default function ChatBot() {
                 className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
               >
                 <span>☰</span>
-                
               </button>
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
             </div>

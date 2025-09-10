@@ -1,7 +1,9 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
+import MessageBubble from "../Components/MessageBubble";
 
 export interface ScheduledPost {
+  threadId: string | null;
   post?: string;
   _id: string;
   prompt: string;
@@ -17,33 +19,57 @@ interface CalendarDay {
   posts: ScheduledPost[];
 }
 
-export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
+interface ScheduledPostViewProps {
+  onBack: () => void;
+  scheduledPosts?: ScheduledPost[];
+}
+
+export default function ScheduledPostView({
+  onBack,
+  scheduledPosts: initialPosts = [],
+}: ScheduledPostViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [scheduledPosts, setScheduledPosts] =
+    useState<ScheduledPost[]>(initialPosts);
   const [readyForReviewPosts, setReadyForReviewPosts] = useState<
     ScheduledPost[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [showReadyPosts, setShowReadyPosts] = useState(false);
 
+  // Countdown state
+  const [refreshCountdown, setRefreshCountdown] = useState(60);
+
   const fetchPosts = async () => {
     try {
       const res = await fetch("/api/scheduledposts");
       const data = await res.json();
-      setScheduledPosts(data.scheduled || []);
+      setScheduledPosts(data.scheduled || initialPosts);
       setReadyForReviewPosts(data.readyForReview || []);
     } catch (err) {
       console.error("Failed to fetch scheduled posts", err);
     } finally {
       setLoading(false);
+      setRefreshCountdown(60);
     }
   };
 
   useEffect(() => {
     fetchPosts();
-    const interval = setInterval(fetchPosts, 60 * 1000);
-    return () => clearInterval(interval);
+
+    // Data auto-refresh every 60s
+    const fetchInterval = setInterval(fetchPosts, 60 * 1000);
+
+    // Countdown updater every second
+    const countdownInterval = setInterval(() => {
+      setRefreshCountdown((prev) => (prev > 1 ? prev - 1 : 1));
+    }, 1000);
+
+    return () => {
+      clearInterval(fetchInterval);
+      clearInterval(countdownInterval);
+    };
   }, []);
 
   const navigateMonth = (direction: number) => {
@@ -122,6 +148,54 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
       </div>
     );
   }
+
+  const handleApprove = async (id: string) => {
+    try {
+      const postToApprove = readyForReviewPosts.find((p) => p._id === id);
+      if (!postToApprove) return;
+
+      const res = await fetch("/api/agent", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          post: postToApprove.post || postToApprove.prompt,
+          platform: postToApprove.platform,
+          threadId: postToApprove.threadId || null,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        console.error("Failed to post:", data.error);
+        return;
+      }
+
+      setReadyForReviewPosts((prev) => prev.filter((p) => p._id !== id));
+
+      console.log("Post successfully published:", data.result);
+    } catch (err) {
+      console.error("Error approving post:", err);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      const res = await fetch(`/api/scheduledposts?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        console.error("Failed to delete post:", await res.json());
+        return;
+      }
+      setReadyForReviewPosts((prev) => prev.filter((post) => post._id !== id));
+    } catch (err) {
+      console.error("Error rejecting post:", err);
+    }
+  };
 
   return (
     <div className="flex h-screen w-full bg-gray-950">
@@ -230,7 +304,7 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
                 })}
           </h2>
           <span className="text-xs text-gray-400">
-            Auto-refreshing every 60s
+            Auto-refreshing in {refreshCountdown}s
           </span>
         </div>
 
@@ -246,21 +320,22 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {readyForReviewPosts.map((post) => (
-                    <div
+                  {readyForReviewPosts.map((post, index) => (
+                    <MessageBubble
                       key={post._id}
-                      className="bg-gray-800/80 border border-gray-700/50 rounded-2xl p-6"
-                    >
-                      <div className="text-sm text-gray-400 mb-2">
-                        Platform:{" "}
-                        <span className="font-medium text-white">
-                          {post.platform}
-                        </span>
-                      </div>
-                      <p className="text-white text-base leading-relaxed">
-                        {post.post}
-                      </p>
-                    </div>
+                      message={{
+                        id: post._id,
+                        sender: "ai",
+                        content: post.post || post.prompt,
+                        timestamp: new Date(post.scheduleTime).getTime(),
+                        status: "pending",
+                      }}
+                      onApprove={handleApprove}
+                      onReject={handleReject}
+                      isLatestAiMessage={
+                        index === readyForReviewPosts.length - 1
+                      }
+                    />
                   ))}
                 </div>
               )
