@@ -12,7 +12,7 @@ export interface Message {
     | "rejected"
     | "scheduled";
   threadId?: string;
-  timestamp: number;
+  timestamp: number | string;
 }
 
 export interface ScheduledPost {
@@ -21,6 +21,7 @@ export interface ScheduledPost {
   timestamp: number;
   platform: string;
   status: "scheduled" | "posted" | "canceled";
+  post?: string;
 }
 
 export interface MessageBubbleProps {
