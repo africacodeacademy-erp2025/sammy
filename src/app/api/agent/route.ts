@@ -263,27 +263,6 @@ export async function POST(req: NextRequest) {
         message: `Post scheduled for ${result.scheduleTime}`,
       });
     }
-
-    // If not scheduled, return draft for immediate review
-    // Persist draft with platform and threadId for later approval
-    try {
-      await (await connectDB()).collection("drafts").updateOne(
-        { threadId: result.threadId },
-        {
-          $set: {
-            threadId: result.threadId,
-            platform: detectedPlatform,
-            post: result.post,
-            createdAt: new Date(),
-          },
-        },
-        { upsert: true }
-      );
-    } catch (e) {
-      console.error("Failed to persist draft:", e);
-      // Do not fail the request; continue returning the draft
-    }
-
     return NextResponse.json({
       success: true,
       review: {
@@ -299,47 +278,25 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Step 2: Approve & post to X
+// Step 2: Approve & post
 export async function PUT(req: NextRequest) {
   try {
     const { post, platform, threadId } = await req.json();
 
-    // Attempt to resolve platform in this order:
-    // 1) Explicit platform param
-    // 2) Stored draft by threadId
-    // 3) Detect from content
-    let platformToUse = (platform || "").toLowerCase();
+    const detectedPlatform = detectPlatform(post, platform);
 
-    if (!platformToUse && threadId) {
-      try {
-        const db = await connectDB();
-        const drafts = db.collection("drafts");
-        const draft = await drafts.findOne({ threadId });
-        if (draft?.platform) {
-          platformToUse = String(draft.platform).toLowerCase();
-        }
-      } catch (e) {
-        console.error("Failed to read draft platform:", e);
-      }
-    }
-
-    if (!platformToUse) {
-      const detected = detectPlatform(post, platform);
-      if (detected) platformToUse = detected;
-    }
-
-    if (!platformToUse) {
+    if (!detectedPlatform) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "No supported platform detected. Please specify one (e.g., Facebook or Twitter/X).",
+            "No supported platform detected. Please specify one (e.g., Twitter/X).",
         },
         { status: 400 }
       );
     }
 
-    if (platformToUse === "unsupported") {
+    if (detectedPlatform === "unsupported") {
       return NextResponse.json(
         {
           success: false,
@@ -352,19 +309,9 @@ export async function PUT(req: NextRequest) {
 
     const result = await postApp.invoke({
       post,
-      platform: platformToUse,
+      platform: detectedPlatform,
       threadId,
     });
-
-    // Clean up draft after successful post
-    if (threadId) {
-      try {
-        const db = await connectDB();
-        await db.collection("drafts").deleteOne({ threadId });
-      } catch (e) {
-        console.error("Failed to delete draft after posting:", e);
-      }
-    }
 
     return NextResponse.json({ success: true, result });
   } catch (err: any) {

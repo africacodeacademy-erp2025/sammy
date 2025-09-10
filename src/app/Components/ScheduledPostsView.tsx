@@ -1,7 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import MessageBubble from "../Components/MessageBubble";
-
 export interface ScheduledPost {
   threadId: string | null;
   post?: string;
@@ -329,6 +328,7 @@ export default function ScheduledPostView({
                         content: post.post || post.prompt,
                         timestamp: new Date(post.scheduleTime).getTime(),
                         status: "pending",
+                        platform: post.platform,
                       }}
                       onApprove={handleApprove}
                       onReject={handleReject}

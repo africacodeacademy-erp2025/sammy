@@ -12,6 +12,7 @@ export interface Message {
     | "rejected"
     | "scheduled";
   threadId?: string;
+  platform?: string;
   timestamp: number | string;
 }
 

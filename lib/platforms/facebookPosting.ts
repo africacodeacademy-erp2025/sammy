@@ -33,11 +33,11 @@ export async function facebookPosting(
 
     try {
       const errorData = await res.json();
-      console.error("Facebook API failed with JSON:", errorData);
+      console.error(" Facebook API failed with JSON:", errorData);
       bodyText = JSON.stringify(errorData, null, 2);
     } catch {
       bodyText = await res.text();
-      console.error("Facebook API failed with raw response:", bodyText);
+      console.error(" Facebook API failed with raw response:", bodyText);
     }
 
     throw new Error(
@@ -47,6 +47,8 @@ export async function facebookPosting(
 
   const data = await res.json();
 
+  console.log(" Facebook API success response:", data);
+
   return {
     ...state,
     post,
@@ -54,7 +56,3 @@ export async function facebookPosting(
     result: data,
   };
 }
-
-
-
-

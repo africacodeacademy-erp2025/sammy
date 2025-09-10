@@ -93,7 +93,17 @@ export default function MessageBubble({
               minute: "2-digit",
             })}
           </div>
-          <div className="text-xs opacity-50">{isUser ? "You" : "SaMMy"}</div>
+
+          <div className="flex items-center gap-2">
+            {message.sender === "ai" && message.platform && (
+              <span className="text-xs px-2 py-0.5 rounded-lg bg-blue-500/20 text-blue-300">
+                {message.platform}
+              </span>
+            )}
+            <span className="text-xs opacity-50">
+              {isUser ? "You" : "SaMMy"}
+            </span>
+          </div>
         </div>
 
         {message.sender === "ai" && (

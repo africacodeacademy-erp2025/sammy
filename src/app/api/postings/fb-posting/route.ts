@@ -38,13 +38,14 @@ export async function POST(req: NextRequest) {
 
     const url = `https://graph.facebook.com/v21.0/${pageId}/feed`;
 
+    // Facebook expects URL-encoded params, NOT JSON
+    const params = new URLSearchParams();
+    params.append("message", post);
+    params.append("access_token", pageAccessToken);
+
     const graphRes = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: post,
-        access_token: pageAccessToken,
-      }),
+      body: params,
     });
 
     const data = await graphRes.json();

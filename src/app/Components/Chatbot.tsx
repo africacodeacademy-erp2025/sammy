@@ -90,6 +90,7 @@ export default function ChatBot() {
         content: data.review?.post || data.message,
         status: data.message ? "scheduled" : "pending",
         threadId: data.review?.threadId,
+        platform: data.review?.platform,
       });
     } catch (err: any) {
       addMessage({
@@ -115,7 +116,11 @@ export default function ChatBot() {
       const res = await fetch("/api/agent", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ post: draft.content, threadId: draft.threadId }),
+        body: JSON.stringify({
+          post: draft.content,
+          platform: draft.platform,
+          threadId: draft.threadId,
+        }),
       });
 
       const data = await res.json();
