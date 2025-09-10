@@ -36,10 +36,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ✅ Graph API endpoint for creating a feed post on a Page (latest version v21.0)
     const url = `https://graph.facebook.com/v21.0/${pageId}/feed`;
 
-    // ✅ Use JSON body instead of URL-encoded to avoid fetch serialization issues
     const graphRes = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

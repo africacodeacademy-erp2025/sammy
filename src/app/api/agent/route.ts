@@ -144,7 +144,7 @@ export async function generatePost(
       },
       {
         role: "user",
-        content: `Make a post for ${state.platform || "Twitter/X"}.\n\nContext from database:\n${context}\n\nUser request:\n${prompt}`,
+        content: `Make a post for ${state.platform}.\n\nContext from database:\n${context}\n\nUser request:\n${prompt}`,
       },
     ],
     max_tokens: 250,
@@ -240,7 +240,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await generateApp.invoke({ prompt, platform: detectedPlatform });
+    const result = await generateApp.invoke({
+      prompt,
+      platform: detectedPlatform,
+    });
 
     const db = await connectDB();
     const scheduledPosts = db.collection("scheduledPosts");
