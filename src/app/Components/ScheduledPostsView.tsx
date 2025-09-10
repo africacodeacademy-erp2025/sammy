@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 
 export interface ScheduledPost {
+  post?: string;
   _id: string;
   prompt: string;
   platform: string;
@@ -20,13 +21,18 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [readyForReviewPosts, setReadyForReviewPosts] = useState<
+    ScheduledPost[]
+  >([]);
   const [loading, setLoading] = useState(true);
+  const [showReadyPosts, setShowReadyPosts] = useState(false);
 
   const fetchPosts = async () => {
     try {
       const res = await fetch("/api/scheduledposts");
       const data = await res.json();
       setScheduledPosts(data.scheduled || []);
+      setReadyForReviewPosts(data.readyForReview || []);
     } catch (err) {
       console.error("Failed to fetch scheduled posts", err);
     } finally {
@@ -72,9 +78,7 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
         isCurrentMonth: d.getMonth() === month,
         isToday: dateString === today,
         posts: scheduledPosts.filter(
-          (post) =>
-            new Date(post.scheduleTime).toDateString() === dateString &&
-            post.status === "scheduled"
+          (post) => new Date(post.scheduleTime).toDateString() === dateString
         ),
       });
     }
@@ -85,7 +89,7 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
     return scheduledPosts.filter(
       (post) =>
         new Date(post.scheduleTime).toDateString() ===
-          selectedDate.toDateString() && post.status === "scheduled"
+        selectedDate.toDateString()
     );
   }, [selectedDate, scheduledPosts]);
 
@@ -123,7 +127,6 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
     <div className="flex h-screen w-full bg-gray-950">
       {/* Sidebar Calendar */}
       <div className="w-80 bg-gray-900/90 border-r border-gray-700/50 flex flex-col">
-        {/* Header */}
         <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50">
           <div className="flex items-center gap-3 mb-6">
             <button
@@ -201,18 +204,30 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
             </div>
           </div>
         </div>
+
+        {/* Show Ready for Review Button */}
+        <div className="p-4 border-t border-gray-700/50">
+          <button
+            onClick={() => setShowReadyPosts(!showReadyPosts)}
+            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold"
+          >
+            {showReadyPosts ? "Hide Ready for Review" : "Show Ready for Review"}
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50 flex justify-between items-center">
           <h2 className="text-xl text-white font-medium">
-            {selectedDate.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            {showReadyPosts
+              ? "Posts Ready for Review"
+              : selectedDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
           </h2>
           <span className="text-xs text-gray-400">
             Auto-refreshing every 60s
@@ -221,7 +236,35 @@ export default function ScheduledPostView({ onBack }: { onBack: () => void }) {
 
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           <div className="p-6">
-            {selectedDatePosts.length === 0 ? (
+            {showReadyPosts ? (
+              readyForReviewPosts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-80 text-center">
+                  <div className="text-6xl mb-6">✅</div>
+                  <h3 className="text-2xl font-bold text-white mb-4">
+                    No posts ready for review
+                  </h3>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {readyForReviewPosts.map((post) => (
+                    <div
+                      key={post._id}
+                      className="bg-gray-800/80 border border-gray-700/50 rounded-2xl p-6"
+                    >
+                      <div className="text-sm text-gray-400 mb-2">
+                        Platform:{" "}
+                        <span className="font-medium text-white">
+                          {post.platform}
+                        </span>
+                      </div>
+                      <p className="text-white text-base leading-relaxed">
+                        {post.post}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : selectedDatePosts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-80 text-center">
                 <div className="text-6xl mb-6">📝</div>
                 <h3 className="text-2xl font-bold text-white mb-4">
