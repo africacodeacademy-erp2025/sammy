@@ -34,3 +34,23 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Environment Variables
+
+Set the following for posting integrations:
+
+- TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET
+- FACEBOOK_PAGE_ID, FACEBOOK_PAGE_ACCESS_TOKEN
+
+### Facebook Posting
+
+Backend supports Facebook Page posting via Graph API without UI changes.
+
+Required env vars:
+
+```
+FACEBOOK_PAGE_ID=<your_page_id>
+FACEBOOK_PAGE_ACCESS_TOKEN=<long_lived_page_access_token>
+```
+
+The agent routes posts to Facebook when platform is detected as "facebook" or specified explicitly.

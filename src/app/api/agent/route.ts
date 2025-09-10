@@ -6,6 +6,7 @@ import OpenAI from "openai";
 
 // Import modular nodes
 import { twitterPosting } from "../../../../lib/platforms/twitterPosting";
+import { facebookPosting } from "../../../../lib/platforms/facebookPosting";
 import { connectDB } from "../../../../lib/mongo";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
@@ -32,8 +33,10 @@ function detectPlatform(prompt: string, platform?: string): string | null {
   if (normalized.includes("twitter") || normalized.includes("x")) {
     return "twitter";
   }
+  if (normalized.includes("facebook")) {
+    return "facebook";
+  }
   if (
-    normalized.includes("facebook") ||
     normalized.includes("instagram") ||
     normalized.includes("tiktok") ||
     normalized.includes("linkedin")
@@ -141,7 +144,7 @@ export async function generatePost(
       },
       {
         role: "user",
-        content: `Make a post for Twitter/X.\n\nContext from database:\n${context}\n\nUser request:\n${prompt}`,
+        content: `Make a post for ${state.platform || "Twitter/X"}.\n\nContext from database:\n${context}\n\nUser request:\n${prompt}`,
       },
     ],
     max_tokens: 250,
@@ -197,8 +200,12 @@ const postWorkflow = new StateGraph<GraphState>({
   },
 });
 postWorkflow.addNode("twitterPosting", twitterPosting as any);
-postWorkflow.addEdge(START, "twitterPosting" as any);
+postWorkflow.addNode("facebookPosting", facebookPosting as any);
+postWorkflow.addConditionalEdges(START, (state) =>
+  state.platform === "facebook" ? "facebookPosting" : "twitterPosting"
+);
 postWorkflow.addEdge("twitterPosting" as any, END);
+postWorkflow.addEdge("facebookPosting" as any, END);
 
 const postApp = postWorkflow.compile();
 
@@ -227,13 +234,13 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error:
-            "This platform is not supported yet. Currently only Twitter/X is supported.",
+            "This platform is not supported yet. Currently only Twitter/X and Facebook are supported.",
         },
         { status: 400 }
       );
     }
 
-    const result = await generateApp.invoke({ prompt, platform: "twitter" });
+    const result = await generateApp.invoke({ prompt, platform: detectedPlatform });
 
     const db = await connectDB();
     const scheduledPosts = db.collection("scheduledPosts");
@@ -255,6 +262,25 @@ export async function POST(req: NextRequest) {
     }
 
     // If not scheduled, return draft for immediate review
+    // Persist draft with platform and threadId for later approval
+    try {
+      await (await connectDB()).collection("drafts").updateOne(
+        { threadId: result.threadId },
+        {
+          $set: {
+            threadId: result.threadId,
+            platform: detectedPlatform,
+            post: result.post,
+            createdAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.error("Failed to persist draft:", e);
+      // Do not fail the request; continue returning the draft
+    }
+
     return NextResponse.json({
       success: true,
       review: {
@@ -275,25 +301,47 @@ export async function PUT(req: NextRequest) {
   try {
     const { post, platform, threadId } = await req.json();
 
-    const detectedPlatform = detectPlatform(post, platform);
+    // Attempt to resolve platform in this order:
+    // 1) Explicit platform param
+    // 2) Stored draft by threadId
+    // 3) Detect from content
+    let platformToUse = (platform || "").toLowerCase();
 
-    if (!detectedPlatform) {
+    if (!platformToUse && threadId) {
+      try {
+        const db = await connectDB();
+        const drafts = db.collection("drafts");
+        const draft = await drafts.findOne({ threadId });
+        if (draft?.platform) {
+          platformToUse = String(draft.platform).toLowerCase();
+        }
+      } catch (e) {
+        console.error("Failed to read draft platform:", e);
+      }
+    }
+
+    if (!platformToUse) {
+      const detected = detectPlatform(post, platform);
+      if (detected) platformToUse = detected;
+    }
+
+    if (!platformToUse) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "No supported platform detected. Please specify one (e.g., Twitter/X).",
+            "No supported platform detected. Please specify one (e.g., Facebook or Twitter/X).",
         },
         { status: 400 }
       );
     }
 
-    if (detectedPlatform === "unsupported") {
+    if (platformToUse === "unsupported") {
       return NextResponse.json(
         {
           success: false,
           error:
-            "This platform is not supported yet. Currently only Twitter/X is supported.",
+            "This platform is not supported yet. Currently only Twitter/X and Facebook are supported.",
         },
         { status: 400 }
       );
@@ -301,9 +349,19 @@ export async function PUT(req: NextRequest) {
 
     const result = await postApp.invoke({
       post,
-      platform: "twitter",
+      platform: platformToUse,
       threadId,
     });
+
+    // Clean up draft after successful post
+    if (threadId) {
+      try {
+        const db = await connectDB();
+        await db.collection("drafts").deleteOne({ threadId });
+      } catch (e) {
+        console.error("Failed to delete draft after posting:", e);
+      }
+    }
 
     return NextResponse.json({ success: true, result });
   } catch (err: any) {
