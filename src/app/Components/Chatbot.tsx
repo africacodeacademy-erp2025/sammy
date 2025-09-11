@@ -287,6 +287,7 @@ export default function ChatBot() {
           )}
 
           <div ref={messagesEndRef} />
+          <div className="absolute bottom-0 left-0 w-full h-64 bg-gradient-to-t from-gray-950 via-gray-950/90 via-gray-950/50 to-transparent pointer-events-none" />
         </div>
 
         {/* Input Area */}
