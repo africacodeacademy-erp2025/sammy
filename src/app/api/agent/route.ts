@@ -24,6 +24,8 @@ export interface GraphState {
   threadId?: string;
   result?: any;
   scheduleTime?: string | null;
+  success?: boolean;
+  error?: string;
 }
 
 // === Platform Detection Helper ===
@@ -132,6 +134,17 @@ export async function generatePost(
     ])
     .toArray();
 
+  // Set similarity threshold
+  const RELEVANCE_THRESHOLD = 0.6;
+
+  const topResult = vectorSearchResults[0];
+  if (!topResult || topResult.score < RELEVANCE_THRESHOLD) {
+    return {
+      success: false,
+      error: "Prompt is irrelevant to stored posts",
+    };
+  }
+
   const context = vectorSearchResults.map((d) => `- ${d.text}`).join("\n");
 
   const completion = await openai.chat.completions.create({
@@ -156,6 +169,7 @@ export async function generatePost(
     post: postText,
     threadId: generateThreadId(),
     platform: state.platform,
+    success: true,
   };
 }
 
@@ -177,6 +191,8 @@ const generateWorkflow = new StateGraph<GraphState>({
     post: null,
     threadId: null,
     scheduleTime: null,
+    success: null,
+    error: null,
   },
 });
 
@@ -245,6 +261,14 @@ export async function POST(req: NextRequest) {
       platform: detectedPlatform,
     });
 
+    // Auto-reject irrelevant prompts
+    if (result.success === false) {
+      return NextResponse.json({
+        success: false,
+        error: result.error,
+      });
+    }
+
     const db = await connectDB();
     const scheduledPosts = db.collection("scheduledPosts");
 
@@ -263,6 +287,7 @@ export async function POST(req: NextRequest) {
         message: `Post scheduled for ${result.scheduleTime}`,
       });
     }
+
     return NextResponse.json({
       success: true,
       review: {

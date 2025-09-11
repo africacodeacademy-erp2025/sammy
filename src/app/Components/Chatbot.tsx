@@ -194,8 +194,12 @@ export default function ChatBot() {
         <div className="p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 z-10 sticky top-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">S</span>
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
+                <img
+                  src="/SaMMy.png"
+                  alt="Logo"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div>
                 <h1 className="font-bold text-white">SaMMy</h1>
@@ -216,21 +220,21 @@ export default function ChatBot() {
               )}
               <button
                 onClick={toggleSidebar}
-                className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center gap-2"
+                className="px-3 py-1.5 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center justify-center"
               >
-                <span>☰</span>
+                <span className="text-sm">◧</span>
               </button>
+
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
             </div>
           </div>
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto p-4 pb-40 space-y-6 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
+        <div className="flex-1 flex flex-col overflow-y-auto p-4 pb-40 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-white/60">
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-white/60">
               <div className="text-center max-w-md mb-8">
-                <div className="text-4xl mb-4">🤖</div>
                 <h2 className="text-2xl font-extrabold mb-4">
                   What do you want to post about?
                 </h2>
@@ -242,7 +246,8 @@ export default function ChatBot() {
                     <li>• "Create a tweet about launching our new branch"</li>
                     <li>• "Write a linkedin post about our opened intake"</li>
                     <li>
-                      • "Draft a facebook promotional post for my product"
+                      • "Draft a facebook promotional post for my product today
+                      at 15:30 Lesotho time"
                     </li>
                   </ul>
                 </div>
