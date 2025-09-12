@@ -36,8 +36,6 @@ export default function ScheduledPostView({
   >([]);
   const [loading, setLoading] = useState(true);
   const [showReadyPosts, setShowReadyPosts] = useState(false);
-
-  // Countdown state
   const [refreshCountdown, setRefreshCountdown] = useState(60);
 
   const fetchPosts = async () => {
@@ -56,15 +54,10 @@ export default function ScheduledPostView({
 
   useEffect(() => {
     fetchPosts();
-
-    // Data auto-refresh every 60s
     const fetchInterval = setInterval(fetchPosts, 60 * 1000);
-
-    // Countdown updater every second
     const countdownInterval = setInterval(() => {
       setRefreshCountdown((prev) => (prev > 1 ? prev - 1 : 1));
     }, 1000);
-
     return () => {
       clearInterval(fetchInterval);
       clearInterval(countdownInterval);
@@ -88,10 +81,8 @@ export default function ScheduledPostView({
     const endDate = new Date(
       lastDay.getTime() + (6 - lastDay.getDay()) * 24 * 60 * 60 * 1000
     );
-
     const days: CalendarDay[] = [];
     const today = new Date().toDateString();
-
     for (
       let d = new Date(startDate);
       d <= endDate;
@@ -152,29 +143,18 @@ export default function ScheduledPostView({
     try {
       const postToApprove = readyForReviewPosts.find((p) => p._id === id);
       if (!postToApprove) return;
-
       const res = await fetch("/api/agent", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           post: postToApprove.post || postToApprove.prompt,
           platform: postToApprove.platform,
           threadId: postToApprove.threadId || null,
         }),
       });
-
       const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        console.error("Failed to post:", data.error);
-        return;
-      }
-
+      if (!res.ok || !data.success) return;
       setReadyForReviewPosts((prev) => prev.filter((p) => p._id !== id));
-
-      console.log("Post successfully published:", data.result);
     } catch (err) {
       console.error("Error approving post:", err);
     }
@@ -185,11 +165,7 @@ export default function ScheduledPostView({
       const res = await fetch(`/api/scheduledposts?id=${id}`, {
         method: "DELETE",
       });
-
-      if (!res.ok) {
-        console.error("Failed to delete post:", await res.json());
-        return;
-      }
+      if (!res.ok) return;
       setReadyForReviewPosts((prev) => prev.filter((post) => post._id !== id));
     } catch (err) {
       console.error("Error rejecting post:", err);
@@ -197,9 +173,9 @@ export default function ScheduledPostView({
   };
 
   return (
-    <div className="flex h-screen w-full bg-gray-950">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-gray-950">
       {/* Sidebar Calendar */}
-      <div className="w-80 bg-gray-900/90 border-r border-gray-700/50 flex flex-col">
+      <div className="w-full md:w-80 bg-gray-900/90 border-r border-gray-700/50 flex flex-col">
         <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50">
           <div className="flex items-center gap-3 mb-6">
             <button
@@ -209,7 +185,9 @@ export default function ScheduledPostView({
               ←
             </button>
             <div>
-              <h1 className="font-bold text-white">Content Calendar</h1>
+              <h1 className="font-bold text-white text-sm md:text-base">
+                Content Calendar
+              </h1>
               <p className="text-xs text-white/60">Scheduled Posts</p>
             </div>
           </div>
@@ -219,7 +197,7 @@ export default function ScheduledPostView({
         <div className="p-4 flex-1 overflow-y-auto">
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-medium">
+              <h3 className="text-white font-medium text-sm md:text-base">
                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
               </h3>
               <div className="flex gap-1">
@@ -235,7 +213,7 @@ export default function ScheduledPostView({
               </div>
             </div>
 
-            <div className="grid grid-cols-7 gap-1 text-xs">
+            <div className="grid grid-cols-7 gap-1 text-xs md:text-sm">
               {dayNames.map((day, i) => (
                 <div
                   key={i}
@@ -248,7 +226,7 @@ export default function ScheduledPostView({
                 <button
                   key={`${i}-${day.date.getTime()}`}
                   onClick={() => setSelectedDate(day.date)}
-                  className={`h-8 text-xs rounded transition-all relative
+                  className={`h-8 text-xs md:text-sm rounded transition-all relative
                     ${!day.isCurrentMonth ? "text-gray-600" : "text-gray-200"}
                     ${
                       day.isToday
@@ -291,8 +269,8 @@ export default function ScheduledPostView({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50 flex justify-between items-center">
-          <h2 className="text-xl text-white font-medium">
+        <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <h2 className="text-lg md:text-xl text-white font-medium">
             {showReadyPosts
               ? "Posts Ready for Review"
               : selectedDate.toLocaleDateString("en-US", {
@@ -308,12 +286,12 @@ export default function ScheduledPostView({
         </div>
 
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-900/30 to-gray-900/10">
-          <div className="p-6">
+          <div className="p-4 md:p-6">
             {showReadyPosts ? (
               readyForReviewPosts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-80 text-center">
+                <div className="flex flex-col items-center justify-center h-60 text-center">
                   <div className="text-6xl mb-6">✅</div>
-                  <h3 className="text-2xl font-bold text-white mb-4">
+                  <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
                     No posts ready for review
                   </h3>
                 </div>
@@ -340,9 +318,9 @@ export default function ScheduledPostView({
                 </div>
               )
             ) : selectedDatePosts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-80 text-center">
+              <div className="flex flex-col items-center justify-center h-60 text-center">
                 <div className="text-6xl mb-6">📝</div>
-                <h3 className="text-2xl font-bold text-white mb-4">
+                <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
                   No posts scheduled
                 </h3>
               </div>
@@ -351,12 +329,12 @@ export default function ScheduledPostView({
                 {selectedDatePosts.map((post) => (
                   <div
                     key={post._id}
-                    className="bg-gray-800/80 border border-gray-700/50 rounded-2xl p-6"
+                    className="bg-gray-800/80 border border-gray-700/50 rounded-2xl p-4 md:p-6"
                   >
                     <div className="text-sm text-gray-400 mb-2">
                       Scheduled for {formatTime(post.scheduleTime)}
                     </div>
-                    <p className="text-white text-base leading-relaxed">
+                    <p className="text-white text-sm md:text-base leading-relaxed">
                       {post.prompt}
                     </p>
                   </div>

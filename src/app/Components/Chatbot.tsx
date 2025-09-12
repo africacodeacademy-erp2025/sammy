@@ -21,12 +21,10 @@ export default function ChatBot() {
     .map((msg) => msg.id)
     .pop();
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -57,7 +55,6 @@ export default function ChatBot() {
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
-
     const userInput = input.trim();
     addMessage({ sender: "user", content: userInput });
     setInput("");
@@ -65,7 +62,7 @@ export default function ChatBot() {
     setIsTyping(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // simulate typing delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -75,7 +72,6 @@ export default function ChatBot() {
 
       const data = await res.json();
 
-      // Show backend errors directly in the message bubble
       if (!res.ok || data.error) {
         addMessage({
           sender: "ai",
@@ -176,7 +172,7 @@ export default function ChatBot() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-gray-950">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-gray-950">
       {/* Sidebar */}
       <Sidebar
         isOpen={sidebarOpen}
@@ -192,7 +188,7 @@ export default function ChatBot() {
       >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 z-10 sticky top-0">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
                 <img
@@ -202,14 +198,16 @@ export default function ChatBot() {
                 />
               </div>
               <div>
-                <h1 className="font-bold text-white">SaMMy</h1>
+                <h1 className="font-bold text-white text-sm sm:text-base">
+                  SaMMy
+                </h1>
                 <p className="text-xs text-white/60">
                   Social Media Content Generator
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mt-2 sm:mt-0">
               {messages.length > 0 && (
                 <button
                   onClick={clearChat}
@@ -231,11 +229,11 @@ export default function ChatBot() {
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-4 pb-40 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
+        <div className="flex-1 flex flex-col overflow-y-auto p-4 pb-40 sm:pb-44 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           {messages.length === 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center min-h-[80vh] text-white/60">
+            <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-white/60">
               <div className="text-center max-w-md mb-8">
-                <h2 className="text-2xl font-extrabold mb-4">
+                <h2 className="text-xl sm:text-2xl font-extrabold mb-4">
                   What do you want to post about?
                 </h2>
                 <div className="p-4 rounded-xl text-left backdrop-blur-sm">
@@ -287,12 +285,12 @@ export default function ChatBot() {
           )}
 
           <div ref={messagesEndRef} />
-          <div className="absolute bottom-0 left-0 w-full h-64 bg-gradient-to-t from-gray-950 via-gray-950/90 via-gray-950/50 to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-full h-64 sm:h-72 bg-gradient-to-t from-gray-950 via-gray-950/90 via-gray-950/50 to-transparent pointer-events-none" />
         </div>
 
         {/* Input Area */}
-        <div className="w-full max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-4 pb-4 z-20">
-          <div className="flex items-end gap-2">
+        <div className="w-full max-w-full sm:max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-4 pb-4 z-20">
+          <div className="flex flex-row gap-2">
             <textarea
               ref={textareaRef}
               className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900/90 text-white placeholder-white/60"
@@ -304,6 +302,7 @@ export default function ChatBot() {
               disabled={loading}
             />
 
+            {/* Send Button (unchanged) */}
             <button
               className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
               disabled={loading || !input.trim()}
