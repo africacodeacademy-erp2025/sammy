@@ -64,12 +64,16 @@ export default function ChatBot() {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
+      const token = localStorage.getItem("token");
+
       const res = await fetch("/api/agent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ prompt: userInput }),
       });
-
       const data = await res.json();
 
       if (!res.ok || data.error) {
@@ -111,7 +115,10 @@ export default function ChatBot() {
     try {
       const res = await fetch("/api/agent", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
         body: JSON.stringify({
           post: draft.content,
           platform: draft.platform,

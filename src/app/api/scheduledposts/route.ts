@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../lib/mongo";
 import { ObjectId } from "mongodb";
+import { getUserFromRequest } from "../../../../lib/auth";
 
 type ScheduledPost = {
   _id: ObjectId;
+  userId: string;
   prompt: string;
   platform: string;
   scheduleTime: string;
@@ -18,12 +20,19 @@ type ScheduledPostsResponse = {
   readyForReview: ScheduledPost[];
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const user = await getUserFromRequest(req.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const db = await connectDB();
     const scheduledPosts = db.collection<ScheduledPost>("scheduledPosts");
 
-    const allPosts = await scheduledPosts.find({}).toArray();
+    const allPosts = await scheduledPosts
+      .find({ userId: user._id.toString() })
+      .toArray();
 
     const scheduled = allPosts.filter((p) => p.status === "scheduled");
     const readyForReview = allPosts.filter(
@@ -47,6 +56,11 @@ export async function GET() {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const user = await getUserFromRequest(req.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -57,11 +71,14 @@ export async function DELETE(req: NextRequest) {
     const db = await connectDB();
     const scheduledPosts = db.collection<ScheduledPost>("scheduledPosts");
 
-    const result = await scheduledPosts.deleteOne({ _id: new ObjectId(id) });
+    const result = await scheduledPosts.deleteOne({
+      _id: new ObjectId(id),
+      userId: user._id.toString(),
+    });
 
     if (result.deletedCount === 0) {
       return NextResponse.json(
-        { error: "Post not found or already deleted" },
+        { error: "Post not found, already deleted, or unauthorized" },
         { status: 404 }
       );
     }

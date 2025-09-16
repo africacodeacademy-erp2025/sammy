@@ -1,16 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { getUserFromRequest } from "../../../../../lib/auth";
 
 /**
- * Facebook posting endpoint using Graph API.
- * Requires the following env vars:
- * - FACEBOOK_PAGE_ID
- * - FACEBOOK_PAGE_ACCESS_TOKEN (long-lived page access token)
+ * Facebook posting endpoint using Graph API per user.
  */
 export async function POST(req: NextRequest) {
   try {
+    const user = await getUserFromRequest(req.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
-    const { post, platform } = body;
+    const { post, platform, tokens } = body;
 
     if (!post) {
       return NextResponse.json(
@@ -26,19 +29,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pageId = process.env.FACEBOOK_PAGE_ID as string;
-    const pageAccessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN as string;
+    // Prefer tokens from request body, fallback to user.facebook
+    const pageId = tokens?.facebook?.pageId || user.facebook?.pageId;
+    const pageAccessToken =
+      tokens?.facebook?.accessToken || user.facebook?.accessToken;
 
     if (!pageId || !pageAccessToken) {
       return NextResponse.json(
-        { error: "Facebook credentials are not configured on the server" },
-        { status: 500 }
+        { error: "Facebook credentials not configured for this user" },
+        { status: 400 }
       );
     }
 
     const url = `https://graph.facebook.com/v21.0/${pageId}/feed`;
-
-    // Facebook expects URL-encoded params, NOT JSON
     const params = new URLSearchParams();
     params.append("message", post);
     params.append("access_token", pageAccessToken);
