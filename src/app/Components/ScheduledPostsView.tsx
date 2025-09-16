@@ -1,6 +1,7 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import MessageBubble from "../Components/MessageBubble";
+
 export interface ScheduledPost {
   threadId: string | null;
   post?: string;
@@ -38,9 +39,14 @@ export default function ScheduledPostView({
   const [showReadyPosts, setShowReadyPosts] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
-      const res = await fetch("/api/scheduledposts");
+      const res = await fetch("/api/scheduledposts", {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: localStorage.getItem("token") || "",
+        },
+      });
       const data = await res.json();
       setScheduledPosts(data.scheduled || initialPosts);
       setReadyForReviewPosts(data.readyForReview || []);
@@ -49,6 +55,45 @@ export default function ScheduledPostView({
     } finally {
       setLoading(false);
       setRefreshCountdown(60);
+    }
+  }, [initialPosts]);
+
+  const handleApprove = async (id: string) => {
+    try {
+      const postToApprove = readyForReviewPosts.find((p) => p._id === id);
+      if (!postToApprove) return;
+      const res = await fetch("/api/agent", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: localStorage.getItem("token") || "",
+        },
+        body: JSON.stringify({
+          post: postToApprove.post || postToApprove.prompt,
+          platform: postToApprove.platform,
+          threadId: postToApprove.threadId || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) return;
+      setReadyForReviewPosts((prev) => prev.filter((p) => p._id !== id));
+    } catch (err) {
+      console.error("Error approving post:", err);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      const res = await fetch(`/api/scheduledposts?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: localStorage.getItem("token") || "",
+        },
+      });
+      if (!res.ok) return;
+      setReadyForReviewPosts((prev) => prev.filter((post) => post._id !== id));
+    } catch (err) {
+      console.error("Error rejecting post:", err);
     }
   };
 
@@ -62,7 +107,7 @@ export default function ScheduledPostView({
       clearInterval(fetchInterval);
       clearInterval(countdownInterval);
     };
-  }, []);
+  }, [fetchPosts]);
 
   const navigateMonth = (direction: number) => {
     setCurrentDate(
@@ -138,39 +183,6 @@ export default function ScheduledPostView({
       </div>
     );
   }
-
-  const handleApprove = async (id: string) => {
-    try {
-      const postToApprove = readyForReviewPosts.find((p) => p._id === id);
-      if (!postToApprove) return;
-      const res = await fetch("/api/agent", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          post: postToApprove.post || postToApprove.prompt,
-          platform: postToApprove.platform,
-          threadId: postToApprove.threadId || null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) return;
-      setReadyForReviewPosts((prev) => prev.filter((p) => p._id !== id));
-    } catch (err) {
-      console.error("Error approving post:", err);
-    }
-  };
-
-  const handleReject = async (id: string) => {
-    try {
-      const res = await fetch(`/api/scheduledposts?id=${id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) return;
-      setReadyForReviewPosts((prev) => prev.filter((post) => post._id !== id));
-    } catch (err) {
-      console.error("Error rejecting post:", err);
-    }
-  };
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full bg-gray-950">

@@ -10,6 +10,8 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.sender === "user";
   const [isVisible, setIsVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(message.content);
 
   useEffect(() => {
     if (isLatestAiMessage) {
@@ -20,26 +22,73 @@ export default function MessageBubble({
     }
   }, [isLatestAiMessage]);
 
+  const handleSaveEdit = () => {
+    message.content = editedContent;
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditedContent(message.content);
+    setIsEditing(false);
+  };
+
   const statusLabels: Record<string, React.ReactNode> = {
     pending: (
       <div className="flex flex-col gap-2 mt-3 p-3 bg-black/20 rounded-lg border border-white/10">
         <span className="text-xs font-medium text-white/80">
           📝 Ready for review
         </span>
-        <div className="flex gap-2">
-          <button
-            className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-400 flex items-center gap-1"
-            onClick={() => onApprove(message.id)}
-          >
-            <span>✅</span> Approve
-          </button>
-          <button
-            className="text-xs px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-400 flex items-center gap-1"
-            onClick={() => onReject(message.id)}
-          >
-            <span>❌</span> Reject
-          </button>
-        </div>
+
+        {isEditing ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              className="w-full p-2 bg-gray-800/50 text-white rounded border border-gray-700 text-sm"
+              rows={4}
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                className="text-xs p-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                onClick={handleCancelEdit}
+                title="Cancel"
+              >
+                ❌
+              </button>
+              <button
+                className="text-xs p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                onClick={handleSaveEdit}
+                title="Save"
+              >
+                💾
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-1">
+            <button
+              className="text-xs p-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 transition-colors"
+              onClick={() => setIsEditing(true)}
+              title="Edit post"
+            >
+              ✏️
+            </button>
+            <button
+              className="text-xs p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+              onClick={() => onApprove(message.id)}
+              title="Approve"
+            >
+              ✅
+            </button>
+            <button
+              className="text-xs p-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors"
+              onClick={() => onReject(message.id)}
+              title="Reject"
+            >
+              ❌
+            </button>
+          </div>
+        )}
       </div>
     ),
     scheduled: (
@@ -84,7 +133,9 @@ export default function MessageBubble({
             : "bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50"
         }`}
       >
-        <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        <div className="whitespace-pre-wrap break-words">
+          {isEditing ? editedContent : message.content}
+        </div>
 
         <div className="flex justify-between items-center mt-2">
           <div className="text-xs opacity-70">

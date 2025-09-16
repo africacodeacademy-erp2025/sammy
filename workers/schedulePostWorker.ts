@@ -21,6 +21,7 @@ async function runScheduledPostsWorker() {
       const state: GraphState = {
         prompt: postEntry.prompt,
         platform: postEntry.platform,
+        userId: postEntry.userId,
       };
 
       const result = await generatePost(state);

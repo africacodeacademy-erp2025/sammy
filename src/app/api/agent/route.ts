@@ -1,22 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { NextRequest, NextResponse } from "next/server";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import OpenAI from "openai";
-
-// Import modular nodes
 import { twitterPosting } from "../../../../lib/platforms/twitterPosting";
 import { facebookPosting } from "../../../../lib/platforms/facebookPosting";
 import { connectDB } from "../../../../lib/mongo";
+import { getUserFromRequest } from "../../../../lib/auth";
+import { decrypt } from "../../../../lib/crypto";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
-// Generate thread IDs for tracking posts
 function generateThreadId() {
   return Math.random().toString(36).substring(2, 12);
 }
 
-// === Define State Schema ===
 export interface GraphState {
   prompt: string;
   platform: string;
@@ -26,42 +23,32 @@ export interface GraphState {
   scheduleTime?: string | null;
   success?: boolean;
   error?: string;
+  userId?: string;
+  tokens?: { twitter?: string; facebook?: string };
+  authToken?: string;
 }
 
-// === Platform Detection Helper ===
 function detectPlatform(prompt: string, platform?: string): string | null {
   const normalized = (platform || prompt || "").toLowerCase();
-
-  if (normalized.includes("twitter") || normalized.includes("x")) {
+  if (normalized.includes("twitter") || normalized.includes("x"))
     return "twitter";
-  }
-  if (normalized.includes("facebook")) {
-    return "facebook";
-  }
-  if (
-    normalized.includes("instagram") ||
-    normalized.includes("tiktok") ||
-    normalized.includes("linkedin")
-  ) {
+  if (normalized.includes("facebook")) return "facebook";
+  if (["instagram", "tiktok", "linkedin"].some((p) => normalized.includes(p))) {
     return "unsupported";
   }
   return null;
 }
 
-// === Helper: Validate ISO string ===
 function isValidISODate(dateString: string): boolean {
   const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
   return isoRegex.test(dateString);
 }
 
 // === Nodes ===
-
-// Node 1: Extract schedule time from prompt
 async function extractScheduleTime(
   state: GraphState
 ): Promise<Partial<GraphState>> {
   const { prompt } = state;
-
   const now = new Date().toISOString();
 
   const completion = await openai.chat.completions.create({
@@ -83,94 +70,87 @@ Return a JSON object with key "scheduleTime".
   });
 
   let scheduleTime: string | null = null;
-
   try {
-    const raw = completion.choices[0].message?.content ?? "{}";
-    const parsed = JSON.parse(raw);
-
-    if (
-      parsed.scheduleTime &&
-      typeof parsed.scheduleTime === "string" &&
-      isValidISODate(parsed.scheduleTime)
-    ) {
+    const parsed = JSON.parse(completion.choices[0].message?.content ?? "{}");
+    if (parsed.scheduleTime && isValidISODate(parsed.scheduleTime)) {
       scheduleTime = parsed.scheduleTime;
     }
-  } catch (err) {
-    console.error("Failed to parse scheduleTime:", err);
-  }
-
+  } catch {}
   return { scheduleTime };
 }
 
-// Node 2: Generate AI post (only if posting immediately)
+// Generate AI draft using user’s embeddings
 export async function generatePost(
   state: GraphState
 ): Promise<Partial<GraphState>> {
-  const { prompt } = state;
+  const { prompt, userId } = state;
+
+  if (!userId) {
+    console.error("Error: userId is missing from graph state.");
+    return { success: false, error: "User ID is missing for vector search." };
+  }
+
   const db = await connectDB();
   const collection = db.collection("messages");
 
   const queryEmbedding = await getEmbedding(prompt);
 
-  const vectorSearchResults = await collection
-    .aggregate([
-      {
-        $vectorSearch: {
-          index: "vector_index",
-          path: "embedding",
-          queryVector: queryEmbedding,
-          numCandidates: 100,
-          limit: 3,
+  try {
+    const results = await collection
+      .aggregate([
+        {
+          $vectorSearch: {
+            index: "vector_index",
+            path: "embedding",
+            queryVector: queryEmbedding,
+            numCandidates: 100,
+            limit: 3,
+            filter: { userId: { $eq: userId } },
+          },
         },
-      },
-      {
-        $project: {
-          text: 1,
-          channel: 1,
-          ts: 1,
-          score: { $meta: "vectorSearchScore" },
+        {
+          $project: {
+            text: 1,
+            channel: 1,
+            ts: 1,
+            score: { $meta: "vectorSearchScore" },
+          },
         },
-      },
-    ])
-    .toArray();
+      ])
+      .toArray();
 
-  // Set similarity threshold
-  const RELEVANCE_THRESHOLD = 0.6;
+    const context =
+      results.length > 0 ? results.map((d) => `- ${d.text}`).join("\n") : "";
 
-  const topResult = vectorSearchResults[0];
-  if (!topResult || topResult.score < RELEVANCE_THRESHOLD) {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert at writing concise, professional social media posts. Always write as if posting directly to the specified platform.",
+        },
+        {
+          role: "user",
+          content: `Make a post for ${state.platform}.\n\nContext from your Slack messages:\n${context}\n\nUser request:\n${prompt}`,
+        },
+      ],
+      max_tokens: 250,
+    });
+
+    return {
+      post: completion.choices[0].message?.content ?? "",
+      threadId: generateThreadId(),
+      platform: state.platform,
+      success: true,
+    };
+  } catch (dbError: any) {
+    console.error("Database or OpenAI error in generatePost:", dbError);
     return {
       success: false,
-      error: "Prompt is irrelevant to stored posts",
+      error: `Failed to generate post: ${dbError.message}`,
     };
   }
-
-  const context = vectorSearchResults.map((d) => `- ${d.text}`).join("\n");
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are an expert at writing concise, professional social media posts. Always write as if posting directly to the specified platform.",
-      },
-      {
-        role: "user",
-        content: `Make a post for ${state.platform}.\n\nContext from database:\n${context}\n\nUser request:\n${prompt}`,
-      },
-    ],
-    max_tokens: 250,
-  });
-
-  const postText = completion.choices[0].message?.content ?? "";
-
-  return {
-    post: postText,
-    threadId: generateThreadId(),
-    platform: state.platform,
-    success: true,
-  };
 }
 
 async function getEmbedding(text: string) {
@@ -181,9 +161,7 @@ async function getEmbedding(text: string) {
   return embeddingResp.data[0].embedding;
 }
 
-// === Build LangGraph Workflows ===
-
-// Workflow 1: Extract time + optionally generate draft
+// === Workflows ===
 const generateWorkflow = new StateGraph<GraphState>({
   channels: {
     prompt: null,
@@ -193,65 +171,61 @@ const generateWorkflow = new StateGraph<GraphState>({
     scheduleTime: null,
     success: null,
     error: null,
+    userId: null,
   },
 });
-
 generateWorkflow.addNode("extractScheduleTime", extractScheduleTime);
 generateWorkflow.addNode("generatePost", generatePost);
 generateWorkflow.addEdge(START, "extractScheduleTime" as any);
-generateWorkflow.addConditionalEdges("extractScheduleTime" as any, (state) =>
-  state.scheduleTime ? "END" : "generatePost"
+generateWorkflow.addConditionalEdges("extractScheduleTime" as any, (s) =>
+  s.scheduleTime ? "END" : "generatePost"
 );
 generateWorkflow.addEdge("generatePost" as any, END);
-
 const generateApp = generateWorkflow.compile();
 
-// Workflow 2: Post only (after approval)
 const postWorkflow = new StateGraph<GraphState>({
   channels: {
     prompt: null,
     platform: null,
     post: null,
     threadId: null,
+    tokens: null,
+    userId: null,
+    authToken: null,
   },
 });
 postWorkflow.addNode("twitterPosting", twitterPosting as any);
 postWorkflow.addNode("facebookPosting", facebookPosting as any);
-postWorkflow.addConditionalEdges(START, (state) =>
-  state.platform === "facebook" ? "facebookPosting" : "twitterPosting"
+postWorkflow.addConditionalEdges(START, (s) =>
+  s.platform === "facebook" ? "facebookPosting" : "twitterPosting"
 );
 postWorkflow.addEdge("twitterPosting" as any, END);
 postWorkflow.addEdge("facebookPosting" as any, END);
-
 const postApp = postWorkflow.compile();
 
-// === API Entry Points ===
+// === API ===
 
 // Step 1: Generate or schedule
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, platform } = await req.json();
-
-    const detectedPlatform = detectPlatform(prompt, platform);
-
-    if (!detectedPlatform) {
+    const user = await getUserFromRequest(req.headers.get("authorization"));
+    if (!user) {
+      console.error("Unauthorized attempt: getUserFromRequest failed.");
       return NextResponse.json(
         {
           success: false,
-          error:
-            "No supported platform detected. Please specify one (e.g., Twitter/X).",
+          error: "Unauthorized: User not found or invalid token.",
         },
-        { status: 400 }
+        { status: 401 }
       );
     }
+    const userId = user._id.toString();
 
-    if (detectedPlatform === "unsupported") {
+    const { prompt, platform } = await req.json();
+    const detectedPlatform = detectPlatform(prompt, platform);
+    if (!detectedPlatform || detectedPlatform === "unsupported") {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "This platform is not supported yet. Currently only Twitter/X and Facebook are supported.",
-        },
+        { success: false, error: "Unsupported platform" },
         { status: 400 }
       );
     }
@@ -259,28 +233,22 @@ export async function POST(req: NextRequest) {
     const result = await generateApp.invoke({
       prompt,
       platform: detectedPlatform,
+      userId,
     });
 
-    // Auto-reject irrelevant prompts
-    if (result.success === false) {
-      return NextResponse.json({
-        success: false,
-        error: result.error,
-      });
-    }
+    if (result.success === false)
+      return NextResponse.json(result, { status: 400 });
 
     const db = await connectDB();
-    const scheduledPosts = db.collection("scheduledPosts");
-
     if (result.scheduleTime) {
-      await scheduledPosts.insertOne({
+      await db.collection("scheduledPosts").insertOne({
+        userId,
         prompt,
         platform: detectedPlatform,
         scheduleTime: result.scheduleTime,
         status: "scheduled",
         createdAt: new Date(),
       });
-
       return NextResponse.json({
         success: true,
         scheduled: true,
@@ -294,11 +262,11 @@ export async function POST(req: NextRequest) {
         post: result.post,
         threadId: result.threadId,
         platform: result.platform,
-        scheduleTime: null,
+        userId,
       },
     });
   } catch (err: any) {
-    console.error(err);
+    console.error("POST request failed:", err);
     return NextResponse.json({ success: false, error: err.message });
   }
 }
@@ -306,41 +274,78 @@ export async function POST(req: NextRequest) {
 // Step 2: Approve & post
 export async function PUT(req: NextRequest) {
   try {
+    const user = await getUserFromRequest(req.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Unauthorized: User not found or invalid token.",
+        },
+        { status: 401 }
+      );
+    }
+
+    const userId = user._id.toString();
+
     const { post, platform, threadId } = await req.json();
-
     const detectedPlatform = detectPlatform(post, platform);
-
-    if (!detectedPlatform) {
+    if (!detectedPlatform || detectedPlatform === "unsupported") {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "No supported platform detected. Please specify one (e.g., Twitter/X).",
-        },
+        { success: false, error: "Unsupported platform" },
         { status: 400 }
       );
     }
 
-    if (detectedPlatform === "unsupported") {
+    const db = await connectDB();
+    const userDoc = await db.collection("users").findOne({ _id: user._id });
+    if (!userDoc) {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "This platform is not supported yet. Currently only Twitter/X and Facebook are supported.",
-        },
-        { status: 400 }
+        { success: false, error: "User not found in database" },
+        { status: 404 }
       );
     }
 
-    const result = await postApp.invoke({
+    const tokens = {
+      twitter: userDoc?.twitter
+        ? {
+            appKey: userDoc.twitter.appKey,
+            appSecret: userDoc.twitter.appSecret,
+            accessToken: decrypt(userDoc.twitter.accessToken),
+            accessSecret: decrypt(userDoc.twitter.accessSecret),
+          }
+        : null,
+      facebook: userDoc?.facebook
+        ? {
+            pageId: userDoc.facebook.pageId,
+            accessToken: decrypt(userDoc.facebook.accessToken),
+          }
+        : null,
+      slack: userDoc?.slack?.userToken
+        ? decrypt(userDoc.slack.userToken)
+        : null,
+    };
+
+    const authHeader = req.headers.get("authorization") ?? "";
+    const postResult = await postApp.invoke({
       post,
       platform: detectedPlatform,
       threadId,
+      userId,
+      tokens,
+      authToken: authHeader,
     });
 
-    return NextResponse.json({ success: true, result });
+    if (postResult.error) {
+      return NextResponse.json(postResult, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      posted: true,
+      result: postResult,
+    });
   } catch (err: any) {
-    console.error(err);
+    console.error("PUT request failed:", err);
     return NextResponse.json({ success: false, error: err.message });
   }
 }

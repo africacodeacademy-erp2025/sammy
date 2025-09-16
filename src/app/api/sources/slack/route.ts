@@ -1,10 +1,11 @@
- /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { WebClient } from "@slack/web-api";
 import { connectDB } from "../../../../../lib/mongo";
 import OpenAI from "openai";
+import { getUserFromRequest } from "../../../../../lib/auth";
+import { decrypt } from "../../../../../lib/crypto";
 
-const slack = new WebClient(process.env.SLACK_USER_TOKEN);
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
 type MessageDoc = {
@@ -13,27 +14,30 @@ type MessageDoc = {
   text: string;
   ts: string;
   embedding: number[];
+  userId: string;
 };
 
 export async function GET(req: Request) {
   try {
-    const db = await connectDB();
-    const collection = db.collection<MessageDoc>("messages");
-    const results: MessageDoc[] = [];
+    const authHeader = req.headers.get("authorization");
+    const user = await getUserFromRequest(authHeader);
 
-    const { searchParams } = new URL(req.url);
-    const channelsParam = searchParams.get("channels");
-
-    const CHANNELS: string[] = channelsParam ? channelsParam.split(",") : [];
-
-    if (CHANNELS.length === 0) {
+    if (!user || !user.slack?.userToken || !user.slack.channels?.length) {
       return NextResponse.json(
-        { success: false, error: "No channels specified." },
-        { status: 400 }
+        { success: false, error: "Unauthorized or no Slack credentials" },
+        { status: 401 }
       );
     }
 
-    for (const channelName of CHANNELS) {
+    const slackUserToken = decrypt(user.slack.userToken);
+    const slack = new WebClient(slackUserToken);
+
+    const db = await connectDB();
+    const collection = db.collection<MessageDoc>("messages");
+
+    const results: MessageDoc[] = [];
+
+    for (const channelName of user.slack.channels) {
       const list = await slack.conversations.list({ types: "public_channel" });
       const channel = list.channels?.find((c: any) => c.name === channelName);
 
@@ -42,6 +46,7 @@ export async function GET(req: Request) {
         continue;
       }
 
+      // Fetch last 3 messages
       const history = await slack.conversations.history({
         channel: channel.id,
         limit: 3,
@@ -56,6 +61,17 @@ export async function GET(req: Request) {
       }[]) {
         if (!msg.text || !msg.ts) continue;
 
+        // Check if message already exists
+        const existing = await collection.findOne({
+          channel: channelName,
+          ts: msg.ts,
+        });
+        if (existing) {
+          results.push(existing);
+          continue; // Skip embedding for already stored messages
+        }
+
+        // Generate embedding only for new messages
         const embeddingResp = await openai.embeddings.create({
           model: "text-embedding-3-small",
           input: msg.text,
@@ -69,6 +85,7 @@ export async function GET(req: Request) {
           text: msg.text,
           ts: msg.ts,
           embedding,
+          userId: user._id.toString(), // <-- save logged-in user
         };
 
         await collection.updateOne(
@@ -82,12 +99,12 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ success: true, messages: results });
-  } catch (err: unknown) {
-    console.error(err);
+  } catch (err: any) {
+    console.error("Slack fetch error:", err);
     return NextResponse.json(
       {
         success: false,
-        error: err instanceof Error ? err.message : String(err),
+        error: err.message || "Failed to fetch Slack messages",
       },
       { status: 500 }
     );
