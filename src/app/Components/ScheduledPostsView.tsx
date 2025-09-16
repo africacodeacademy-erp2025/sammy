@@ -1,6 +1,7 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import MessageBubble from "../Components/MessageBubble";
+
 export interface ScheduledPost {
   threadId: string | null;
   post?: string;
@@ -38,7 +39,7 @@ export default function ScheduledPostView({
   const [showReadyPosts, setShowReadyPosts] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/scheduledposts", {
         headers: {
@@ -55,7 +56,7 @@ export default function ScheduledPostView({
       setLoading(false);
       setRefreshCountdown(60);
     }
-  };
+  }, [initialPosts]);
 
   const handleApprove = async (id: string) => {
     try {
@@ -106,7 +107,7 @@ export default function ScheduledPostView({
       clearInterval(fetchInterval);
       clearInterval(countdownInterval);
     };
-  }, []);
+  }, [fetchPosts]);
 
   const navigateMonth = (direction: number) => {
     setCurrentDate(
