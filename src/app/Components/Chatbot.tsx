@@ -4,6 +4,7 @@ import { Message } from "../Types";
 import ScheduledPostView from "./ScheduledPostsView";
 import MessageBubble from "../Components/MessageBubble";
 import Sidebar from "./Sidebar";
+import Image from "next/image";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -88,12 +89,14 @@ export default function ChatBot() {
         threadId: data.review?.threadId,
         platform: data.review?.platform,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Sorry, I encountered an error processing your request.";
       addMessage({
         sender: "ai",
-        content:
-          err?.message ||
-          "Sorry, I encountered an error processing your request.",
+        content: message,
         status: "error",
       });
     } finally {
@@ -105,8 +108,6 @@ export default function ChatBot() {
   const handleApproveDraft = async (id: string) => {
     const draft = messages.find((msg) => msg.id === id);
     if (!draft || draft.status !== "pending" || !draft.threadId) return;
-
-    updateMessageStatus(id, "posting");
 
     try {
       const res = await fetch("/api/agent", {
@@ -132,12 +133,15 @@ export default function ChatBot() {
       }
 
       updateMessageStatus(id, "posted");
-    } catch (err: any) {
+    } catch (err: unknown) {
       updateMessageStatus(id, "error");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to post message. Please try again later.";
       addMessage({
         sender: "ai",
-        content:
-          err?.message || "Failed to post message. Please try again later.",
+        content: message,
         status: "error",
       });
     }
@@ -190,11 +194,12 @@ export default function ChatBot() {
         <div className="p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 z-10 sticky top-0">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
-                <img
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
+                <Image
                   src="/SaMMy.png"
                   alt="Logo"
-                  className="w-full h-full object-cover"
+                  fill
+                  style={{ objectFit: "cover" }}
                 />
               </div>
               <div>
@@ -241,11 +246,11 @@ export default function ChatBot() {
                     Try asking me:
                   </p>
                   <ul className="text-xs space-y-1 text-gray-400">
-                    <li>• "Create a tweet about launching our new branch"</li>
-                    <li>• "Write a linkedin post about our opened intake"</li>
+                    <li>• &quot;Create a tweet about launching our new branch&quot;</li>
+                    <li>• &quot;Write a linkedin post about our opened intake&quot;</li>
                     <li>
-                      • "Draft a facebook promotional post for my product today
-                      at 15:30 Lesotho time"
+                      • &quot;Draft a facebook promotional post for my product today
+                      at 15:30 Lesotho time&quot;
                     </li>
                   </ul>
                 </div>
