@@ -4,6 +4,7 @@ import { Message } from "../Types";
 import ScheduledPostView from "./ScheduledPostsView";
 import MessageBubble from "../Components/MessageBubble";
 import Sidebar from "./Sidebar";
+import CredentialsSidebar from "./CredentialsSidebar";
 import Image from "next/image";
 
 export default function ChatBot() {
@@ -12,6 +13,7 @@ export default function ChatBot() {
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [credentialsSidebarOpen, setCredentialsSidebarOpen] = useState(false);
   const [view, setView] = useState<"chat" | "schedule">("chat");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -177,6 +179,10 @@ export default function ChatBot() {
     setSidebarOpen(false);
   };
   const handleBackToChat = () => setView("chat");
+  const handleManageCredentials = () => {
+    setCredentialsSidebarOpen(true);
+    setSidebarOpen(false);
+  };
 
   if (view === "schedule") {
     return <ScheduledPostView onBack={handleBackToChat} />;
@@ -189,6 +195,13 @@ export default function ChatBot() {
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onViewSchedule={handleViewSchedule}
+        onManageCredentials={handleManageCredentials}
+      />
+
+      {/* Credentials Sidebar */}
+      <CredentialsSidebar
+        isOpen={credentialsSidebarOpen}
+        onClose={() => setCredentialsSidebarOpen(false)}
       />
 
       {/* Main Chat Area */}

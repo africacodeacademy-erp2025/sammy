@@ -4,10 +4,12 @@ export default function Sidebar({
   isOpen,
   onClose,
   onViewSchedule,
+  onManageCredentials,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onViewSchedule: () => void;
+  onManageCredentials: () => void;
 }) {
   return (
     <>
@@ -41,6 +43,7 @@ export default function Sidebar({
 
         <div className="p-4 space-y-6 overflow-y-auto h-[calc(100%-4rem)]">
           <div className="space-y-4">
+            {/* View Schedule */}
             <button
               onClick={onViewSchedule}
               className="w-full flex items-center justify-between p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 transition-colors"
@@ -59,45 +62,26 @@ export default function Sidebar({
               <span className="text-gray-400">→</span>
             </button>
 
-            <div className="p-3 bg-gray-800/30 rounded-lg">
-              <h3 className="text-sm font-medium text-white mb-2">
-                Preferences
-              </h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-gray-300">
-                    Default Posting Tone
-                  </label>
-                  <select className="w-full mt-1 bg-gray-700/50 border border-gray-600/50 rounded px-2 py-1 text-xs text-white">
-                    <option>Professional</option>
-                    <option>Casual</option>
-                    <option>Humorous</option>
-                    <option>Informative</option>
-                  </select>
+            {/* Manage Credentials */}
+            <button
+              onClick={onManageCredentials}
+              className="w-full flex items-center justify-between p-4 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-600/20 rounded-lg">
+                  <span className="text-green-400">🔑</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-300">
-                    Auto-post approved content
-                  </span>
-                  <div className="relative inline-block w-10 h-5">
-                    <input type="checkbox" className="sr-only" />
-                    <div className="block w-10 h-5 rounded-full bg-gray-600" />
-                    <div className="absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full" />
-                  </div>
+                <div className="text-left">
+                  <h3 className="text-sm font-medium text-white">
+                    Manage Credentials
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Configure API keys & tokens
+                  </p>
                 </div>
               </div>
-            </div>
-
-            <div className="p-3 bg-gray-800/30 rounded-lg">
-              <h3 className="text-sm font-medium text-white mb-2">App Info</h3>
-              <div className="text-xs text-gray-300 space-y-2">
-                <p>SaMMy will post to the platform specified in your prompt.</p>
-                <p>
-                  Just mention the platform name (Twitter, Instagram, etc.) in
-                  your request.
-                </p>
-              </div>
-            </div>
+              <span className="text-gray-400">→</span>
+            </button>
           </div>
         </div>
       </div>
