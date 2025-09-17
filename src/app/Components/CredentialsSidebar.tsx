@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { useState } from "react";
 import Badge from "./UI/Badge";
 import Separator from "./UI/Separator";
 import Button from "./UI/Button";
@@ -50,6 +50,70 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
       ...prev,
       [platform]: { ...prev[platform], [field]: value },
     }));
+  };
+
+  const saveSlack = async () => {
+    try {
+      const res = await fetch("/api/integrations/slack/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: "Bearer " + localStorage.getItem("token"),
+        },
+        body: JSON.stringify({
+          workspaceId: credentials.slack.workspaceId,
+          botToken: credentials.slack.botToken,
+          userToken: credentials.slack.userToken,
+          channels: credentials.slack.channels,
+        }),
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+    } catch (err) {
+      console.error("Failed to save Slack credentials:", err);
+    }
+  };
+
+  const saveTwitter = async () => {
+    try {
+      const res = await fetch("/api/integrations/twitter/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: "Bearer " + localStorage.getItem("token"),
+        },
+        body: JSON.stringify({
+          appKey: credentials.twitter.apiKey,
+          appSecret: credentials.twitter.apiSecret,
+          accessToken: credentials.twitter.accessToken,
+          accessSecret: credentials.twitter.accessSecret,
+        }),
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+    } catch (err) {
+      console.error("Failed to save Twitter credentials:", err);
+    }
+  };
+
+  const saveFacebook = async () => {
+    try {
+      const res = await fetch("/api/integrations/facebook/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: "Bearer " + localStorage.getItem("token"),
+        },
+        body: JSON.stringify({
+          pageId: credentials.facebook.pageId,
+          accessToken: credentials.facebook.pageAccessToken,
+        }),
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+    } catch (err) {
+      console.error("Failed to save Facebook credentials:", err);
+    }
   };
 
   return (
@@ -130,7 +194,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               />
             </CardContent>
           </Card>
-          <Button>Save Slack Credentials</Button>
+          <Button onClick={saveSlack}>Save Slack Credentials</Button>
           <Separator />
 
           {/* Twitter */}
@@ -183,8 +247,9 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               />
             </CardContent>
           </Card>
-          <Button>Save X Credentials</Button>
+          <Button onClick={saveTwitter}>Save X Credentials</Button>
           <Separator />
+
           {/* Facebook */}
           <Card>
             <CardHeader>
@@ -219,7 +284,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               />
             </CardContent>
           </Card>
-          <Button>Save Facebook Credentials</Button>
+          <Button onClick={saveFacebook}>Save Facebook Credentials</Button>
         </div>
       </div>
     </>
