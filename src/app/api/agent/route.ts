@@ -206,6 +206,7 @@ const postApp = postWorkflow.compile();
 // === API ===
 
 // Step 1: Generate or schedule
+// Step 1: Generate or schedule
 export async function POST(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req.headers.get("authorization"));
@@ -240,8 +241,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(result, { status: 400 });
 
     const db = await connectDB();
+
     if (result.scheduleTime) {
-      await db.collection("scheduledPosts").insertOne({
+      const inserted = await db.collection("scheduledPosts").insertOne({
         userId,
         prompt,
         platform: detectedPlatform,
@@ -249,6 +251,19 @@ export async function POST(req: NextRequest) {
         status: "scheduled",
         createdAt: new Date(),
       });
+
+      // enqueue right away
+      const { enqueueScheduledPost } = await import(
+        "../../../../workers/schedulePostWorker"
+      );
+      await enqueueScheduledPost({
+        _id: inserted.insertedId.toString(),
+        userId,
+        prompt,
+        platform: detectedPlatform,
+        scheduleTime: result.scheduleTime,
+      });
+
       return NextResponse.json({
         success: true,
         scheduled: true,

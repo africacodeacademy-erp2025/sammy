@@ -39,12 +39,14 @@ export default function ScheduledPostView({
   const [showReadyPosts, setShowReadyPosts] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
 
+  const token = localStorage.getItem("token");
+
   const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch("/api/scheduledposts", {
         headers: {
           "Content-Type": "application/json",
-          Authorization: localStorage.getItem("token") || "",
+          Authorization: token ? `Bearer ${token}` : "",
         },
       });
       const data = await res.json();
@@ -54,9 +56,9 @@ export default function ScheduledPostView({
       console.error("Failed to fetch scheduled posts", err);
     } finally {
       setLoading(false);
-      setRefreshCountdown(60);
+      setRefreshCountdown(60); // reset countdown after fetch
     }
-  }, [initialPosts]);
+  }, [initialPosts, token]);
 
   const handleApprove = async (id: string) => {
     try {
@@ -66,7 +68,7 @@ export default function ScheduledPostView({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: localStorage.getItem("token") || "",
+          Authorization: token ? `Bearer ${token}` : "",
         },
         body: JSON.stringify({
           post: postToApprove.post || postToApprove.prompt,
@@ -87,7 +89,7 @@ export default function ScheduledPostView({
       const res = await fetch(`/api/scheduledposts?id=${id}`, {
         method: "DELETE",
         headers: {
-          Authorization: localStorage.getItem("token") || "",
+          Authorization: token ? `Bearer ${token}` : "",
         },
       });
       if (!res.ok) return;
@@ -100,14 +102,16 @@ export default function ScheduledPostView({
   useEffect(() => {
     fetchPosts();
     const fetchInterval = setInterval(fetchPosts, 60 * 1000);
+
     const countdownInterval = setInterval(() => {
-      setRefreshCountdown((prev) => (prev > 1 ? prev - 1 : 1));
+      setRefreshCountdown((prev) => (prev > 1 ? prev - 1 : 60));
     }, 1000);
+
     return () => {
       clearInterval(fetchInterval);
       clearInterval(countdownInterval);
     };
-  }, [fetchPosts]);
+  }, []);
 
   const navigateMonth = (direction: number) => {
     setCurrentDate(
