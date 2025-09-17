@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode } from "react";
+import { ReactNode, useState } from "react";
 
 interface Credentials {
   slack: {
@@ -273,7 +273,7 @@ interface BaseProps {
 }
 
 function Card({ children, className = "" }: BaseProps) {
-  return <div className={`rounded-lg border p-0 ${className}`}>{children}</div>;
+  return <div className={`rounded-lg p-0 ${className}`}>{children}</div>;
 }
 function CardHeader({ children, className = "" }: BaseProps) {
   return <div className={`px-4 pt-4 ${className}`}>{children}</div>;
@@ -285,10 +285,28 @@ function CardContent({ children, className = "" }: BaseProps) {
   return <div className={`px-4 pb-4 ${className}`}>{children}</div>;
 }
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <input
-      className={`w-full rounded border px-3 py-2 text-sm ${props.className ?? ""}`}
+      className={`w-full rounded px-3 py-2 text-sm ${props.className ?? ""}`}
+      style={{
+        borderWidth: "2px",
+        borderStyle: "solid",
+        borderColor: "transparent", // no visible border initially
+        borderImage: isFocused
+          ? "linear-gradient(45deg, #a855f7, #ec4899) 1"
+          : undefined, // apply gradient only on focus
+      }}
       {...props}
+      onFocus={(e) => {
+        setIsFocused(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setIsFocused(false);
+        props.onBlur?.(e);
+      }}
     />
   );
 }
@@ -324,4 +342,3 @@ function Badge({ children, className = "" }: BaseProps) {
     </span>
   );
 }
-/* ------------------------------------------------ */
