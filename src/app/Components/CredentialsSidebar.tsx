@@ -87,7 +87,6 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
         [platform]: data.message || data.error || "Unknown response",
       }));
 
-      // Clear fields after submission
       setCredentials((prev) => ({
         ...prev,
         [platform]: Object.fromEntries(
@@ -107,20 +106,26 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <>
+      {/* Overlay for mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 sm:hidden"
           onClick={onClose}
         />
       )}
 
+      {/* Sidebar */}
       <div
-        className={`fixed top-0 right-0 h-full w-96 bg-gray-900/95 backdrop-blur-xl border-l border-gray-700/50
+        className={`fixed top-0 right-0 h-full bg-gray-900/95 backdrop-blur-xl border-l border-gray-700/50
         transform transition-transform duration-300 z-50 shadow-2xl
+        w-full sm:w-96
         ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
-        <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Credentials</h2>
+        {/* Header */}
+        <div className="p-3 sm:p-4 border-b border-gray-700/50 flex items-center justify-between">
+          <h2 className="text-base sm:text-lg font-semibold text-white">
+            Credentials
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700/50"
@@ -129,16 +134,19 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <div className="p-4 space-y-6 overflow-y-auto h-[calc(100%-4rem)]">
+        {/* Scrollable Content */}
+        <div className="p-3 sm:p-4 space-y-4 sm:space-y-6 overflow-y-auto h-[calc(100%-4rem)]">
           {/* Slack */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-indigo-400">
+              <CardTitle className="flex items-center gap-2 text-indigo-400 text-sm sm:text-base">
                 Slack{" "}
-                <Badge className="bg-indigo-500/20 text-indigo-300">API</Badge>
+                <Badge className="bg-indigo-500/20 text-indigo-300 text-xs sm:text-sm">
+                  API
+                </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3 sm:space-y-4">
               <InputGroup
                 id="slack-user-token"
                 label="User Token"
@@ -172,7 +180,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               <InputGroup
                 id="slack-channels"
                 label="Channels"
-                type="password"
+                type="text"
                 placeholder="general,announcements"
                 value={credentials.slack.channels}
                 onChange={(e) =>
@@ -180,6 +188,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 }
               />
               <Button
+                className="w-full sm:w-auto"
                 onClick={() =>
                   handleSave("slack", "/api/integrations/slack/connect", {
                     workspaceId: credentials.slack.workspaceId,
@@ -192,21 +201,24 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 {loading.slack ? "Saving..." : "Save Credentials"}
               </Button>
               {messages.slack && (
-                <p className="mt-2 text-sm text-gray-300">{messages.slack}</p>
+                <p className="mt-1 text-sm text-gray-300">{messages.slack}</p>
               )}
             </CardContent>
           </Card>
+
           <Separator />
 
           {/* Twitter */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sky-400">
+              <CardTitle className="flex items-center gap-2 text-sky-400 text-sm sm:text-base">
                 Twitter{" "}
-                <Badge className="bg-sky-500/20 text-sky-300">OAuth</Badge>
+                <Badge className="bg-sky-500/20 text-sky-300 text-xs sm:text-sm">
+                  OAuth
+                </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3 sm:space-y-4">
               <InputGroup
                 id="twitter-api-key"
                 label="API Key"
@@ -248,6 +260,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 }
               />
               <Button
+                className="w-full sm:w-auto"
                 onClick={() =>
                   handleSave("twitter", "/api/integrations/twitter/connect", {
                     appKey: credentials.twitter.apiKey,
@@ -260,25 +273,28 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 {loading.twitter ? "Saving..." : "Save Credentials"}
               </Button>
               {messages.twitter && (
-                <p className="mt-2 text-sm text-gray-300">{messages.twitter}</p>
+                <p className="mt-1 text-sm text-gray-300">{messages.twitter}</p>
               )}
             </CardContent>
           </Card>
+
           <Separator />
 
           {/* Facebook */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-400">
+              <CardTitle className="flex items-center gap-2 text-blue-400 text-sm sm:text-base">
                 Facebook{" "}
-                <Badge className="bg-blue-500/20 text-blue-300">Page</Badge>
+                <Badge className="bg-blue-500/20 text-blue-300 text-xs sm:text-sm">
+                  Page
+                </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3 sm:space-y-4">
               <InputGroup
                 id="facebook-page-id"
                 label="Page ID"
-                type="password"
+                type="text"
                 placeholder="Your Facebook Page ID"
                 value={credentials.facebook.pageId}
                 onChange={(e) =>
@@ -300,6 +316,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 }
               />
               <Button
+                className="w-full sm:w-auto"
                 onClick={() =>
                   handleSave("facebook", "/api/integrations/facebook/connect", {
                     pageId: credentials.facebook.pageId,
@@ -310,7 +327,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 {loading.facebook ? "Saving..." : "Save Credentials"}
               </Button>
               {messages.facebook && (
-                <p className="mt-2 text-sm text-gray-300">
+                <p className="mt-1 text-sm text-gray-300">
                   {messages.facebook}
                 </p>
               )}

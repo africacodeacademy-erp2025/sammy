@@ -362,7 +362,7 @@ export default function ChatBot() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={loading || !hasRequiredCredentials}
+              disabled={loading || !hasRequiredCredentials} 
             />
 
             {/* Send Button */}

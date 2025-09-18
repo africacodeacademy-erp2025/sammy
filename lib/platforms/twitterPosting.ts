@@ -5,10 +5,20 @@ export async function twitterPosting(
 ): Promise<Partial<GraphState>> {
   const { post, platform, threadId, tokens, userId, authToken } = state;
 
-  if (!post) throw new Error("Missing 'post' in state");
-  if (!userId) throw new Error("User ID missing from state");
+  if (!post)
+    throw new Error(
+      "Oops! Your Twitter/X post is empty. Please write something before posting."
+    );
+
+  if (!userId)
+    throw new Error(
+      "User information is missing. Please log in again to continue."
+    );
+
   if (!tokens?.twitter)
-    throw new Error("No Twitter/X token found for this user");
+    throw new Error(
+      "Twitter/X credentials are missing. Please connect your Twitter/X account in settings."
+    );
 
   console.log("📡 Sending post to Twitter/X endpoint:", {
     post,
@@ -32,7 +42,9 @@ export async function twitterPosting(
   if (!res.ok) {
     const bodyText = await res.text();
     console.error("Twitter API failed:", bodyText);
-    throw new Error(`Twitter API error (${res.status})\n${bodyText}`);
+    throw new Error(
+      `Could not post to Twitter/X. ${res.status} error. Please check your credentials or try again later.`
+    );
   }
 
   const data = await res.json();

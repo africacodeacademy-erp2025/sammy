@@ -44,7 +44,6 @@ function isValidISODate(dateString: string): boolean {
   return isoRegex.test(dateString);
 }
 
-// === Nodes ===
 async function extractScheduleTime(
   state: GraphState
 ): Promise<Partial<GraphState>> {
@@ -79,7 +78,6 @@ Return a JSON object with key "scheduleTime".
   return { scheduleTime };
 }
 
-// Generate AI draft using user’s embeddings
 export async function generatePost(
   state: GraphState
 ): Promise<Partial<GraphState>> {
@@ -161,7 +159,6 @@ async function getEmbedding(text: string) {
   return embeddingResp.data[0].embedding;
 }
 
-// === Workflows ===
 const generateWorkflow = new StateGraph<GraphState>({
   channels: {
     prompt: null,
@@ -203,10 +200,6 @@ postWorkflow.addEdge("twitterPosting" as any, END);
 postWorkflow.addEdge("facebookPosting" as any, END);
 const postApp = postWorkflow.compile();
 
-// === API ===
-
-// Step 1: Generate or schedule
-// Step 1: Generate or schedule
 export async function POST(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req.headers.get("authorization"));
@@ -252,7 +245,6 @@ export async function POST(req: NextRequest) {
         createdAt: new Date(),
       });
 
-      // enqueue right away
       const { enqueueScheduledPost } = await import(
         "../../../../workers/schedulePostWorker"
       );
@@ -286,7 +278,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Step 2: Approve & post
 export async function PUT(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req.headers.get("authorization"));

@@ -5,18 +5,30 @@ export async function facebookPosting(
 ): Promise<Partial<GraphState>> {
   const { post, platform, threadId, tokens, userId, authToken } = state;
 
-  if (!post) throw new Error("Missing 'post' in state");
-  if (!userId) throw new Error("User ID missing from state");
+  if (!post)
+    throw new Error(
+      "Oops! Your Facebook post is empty. Please write something before posting."
+    );
+
+  if (!userId)
+    throw new Error(
+      "User information is missing. Please log in again to continue."
+    );
+
   if (!tokens?.facebook)
-    throw new Error("No Facebook token found for this user");
+    throw new Error(
+      "Facebook credentials are missing. Please connect your Facebook account in settings."
+    );
+
   const { pageId, accessToken } = tokens.facebook as unknown as {
     pageId: string;
     accessToken: string;
   };
 
-  if (!pageId || !accessToken) {
-    throw new Error("Facebook pageId or accessToken missing from database");
-  }
+  if (!pageId || !accessToken)
+    throw new Error(
+      "Facebook Page ID or Access Token is missing. Please reconnect your Facebook account."
+    );
 
   console.log("📡 Sending post to Facebook endpoint:", {
     post,
@@ -53,7 +65,9 @@ export async function facebookPosting(
       bodyText = await res.text();
       console.error("Facebook API failed (raw):", bodyText);
     }
-    throw new Error(`Facebook API error (${res.status})\n${bodyText}`);
+    throw new Error(
+      `Could not post to Facebook. ${res.status} error. Please check your credentials or try again later.`
+    );
   }
 
   const data = await res.json();
