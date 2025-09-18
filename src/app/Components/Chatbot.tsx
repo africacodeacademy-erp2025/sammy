@@ -15,6 +15,7 @@ export default function ChatBot() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [credentialsSidebarOpen, setCredentialsSidebarOpen] = useState(false);
   const [view, setView] = useState<"chat" | "schedule">("chat");
+  const [hasRequiredCredentials, setHasRequiredCredentials] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -37,6 +38,33 @@ export default function ChatBot() {
       )}px`;
     }
   }, [input]);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const res = await fetch("/api/user", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) return;
+
+        const user = await res.json();
+
+        if (user.slack && user.twitter && user.facebook) {
+          setHasRequiredCredentials(true);
+        } else {
+          setHasRequiredCredentials(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch user", err);
+      }
+    };
+
+    fetchUser();
+  }, []);
 
   const addMessage = useCallback((msg: Omit<Message, "id" | "timestamp">) => {
     const newMessage = {
@@ -266,11 +294,17 @@ export default function ChatBot() {
                     Try asking me:
                   </p>
                   <ul className="text-xs space-y-1 text-gray-400">
-                    <li>• &quot;Create a tweet about launching our new branch&quot;</li>
-                    <li>• &quot;Write a linkedin post about our opened intake&quot;</li>
                     <li>
-                      • &quot;Draft a facebook promotional post for my product today
-                      at 15:30 Lesotho time&quot;
+                      • &quot;Create a tweet about launching our new
+                      branch&quot;
+                    </li>
+                    <li>
+                      • &quot;Write a linkedin post about our opened
+                      intake&quot;
+                    </li>
+                    <li>
+                      • &quot;Draft a facebook promotional post for my product
+                      today at 15:30 Lesotho time&quot;
                     </li>
                   </ul>
                 </div>
@@ -319,18 +353,22 @@ export default function ChatBot() {
             <textarea
               ref={textareaRef}
               className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900/90 text-white placeholder-white/60"
-              placeholder="Instruct SaMMy..."
+              placeholder={
+                hasRequiredCredentials
+                  ? "Instruct SaMMy..."
+                  : "Add Slack, Twitter, and Facebook credentials to chat"
+              }
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={loading}
+              disabled={loading || !hasRequiredCredentials}
             />
 
-            {/* Send Button (unchanged) */}
+            {/* Send Button */}
             <button
               className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
-              disabled={loading || !input.trim()}
+              disabled={loading || !input.trim() || !hasRequiredCredentials}
               onClick={sendMessage}
             >
               {loading ? (
