@@ -1,0 +1,28 @@
+services:
+  next-app:
+    container_name: sammy-app
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+
+    # Load environment variables from .env.local
+    env_file:
+      - .env.local
+
+    # Enable hot reload with volume mounts - adjusted for your project structure
+    volumes:
+      - ./src:/app/src
+      - ./lib:/app/lib
+      - ./models:/app/models
+      - ./workers:/app/workers
+      - ./public:/app/public
+
+    restart: always
+    ports:
+      - 3000:3000
+    networks:
+      - sammy_network
+
+# Network for container communication
+networks:
+  sammy_network:

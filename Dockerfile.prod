@@ -1,0 +1,97 @@
+# syntax=docker.io/docker/dockerfile:1
+
+FROM node:22-alpine AS base
+
+# Builder stage
+FROM base AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* .npmrc* ./
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i; \
+  else echo "Warning: Lockfile not found." && npm install; \
+  fi
+
+# Copy source files - only files that exist in your project
+COPY src ./src
+COPY lib ./lib
+COPY models ./models
+COPY workers ./workers
+COPY public ./public
+COPY next.config.ts .
+COPY tsconfig.json .
+COPY postcss.config.mjs .
+COPY jest.config.js .
+COPY jest.setup.ts .
+
+# Environment variables for build time - using correct names from .env.local
+ARG NODE_ENV
+ENV NODE_ENV=${NODE_ENV}
+ARG MONGO_URI
+ENV MONGO_URI=${MONGO_URI}
+ARG DATABASE_NAME
+ENV DATABASE_NAME=${DATABASE_NAME}
+ARG JWT_SECRET
+ENV JWT_SECRET=${JWT_SECRET}
+ARG OPENAI_API_KEY
+ENV OPENAI_API_KEY=${OPENAI_API_KEY}
+ARG REDIS_URL
+ENV REDIS_URL=${REDIS_URL}
+ARG NEXT_PUBLIC_BASE_URL
+ENV NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+ARG JWT_EXPIRES_IN
+ENV JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+ARG ENC_SECRET
+ENV ENC_SECRET=${ENC_SECRET}
+
+# Build the application
+RUN \
+  if [ -f yarn.lock ]; then yarn build; \
+  elif [ -f package-lock.json ]; then npm run build; \
+  elif [ -f pnpm-lock.yaml ]; then pnpm build; \
+  else npm run build; \
+  fi
+
+# Production runner stage
+FROM base AS runner
+
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy built application
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Runtime environment variables - using correct names from .env.local
+ARG NODE_ENV
+ENV NODE_ENV=${NODE_ENV}
+ARG MONGO_URI
+ENV MONGO_URI=${MONGO_URI}
+ARG DATABASE_NAME
+ENV DATABASE_NAME=${DATABASE_NAME}
+ARG JWT_SECRET
+ENV JWT_SECRET=${JWT_SECRET}
+ARG OPENAI_API_KEY
+ENV OPENAI_API_KEY=${OPENAI_API_KEY}
+ARG REDIS_URL
+ENV REDIS_URL=${REDIS_URL}
+ARG NEXT_PUBLIC_BASE_URL
+ENV NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+ARG JWT_EXPIRES_IN
+ENV JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+ARG ENC_SECRET
+ENV ENC_SECRET=${ENC_SECRET}
+
+USER nextjs
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
