@@ -41,6 +41,18 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
     facebook: { pageId: "", pageAccessToken: "" },
   });
 
+  const [loading, setLoading] = useState({
+    slack: false,
+    twitter: false,
+    facebook: false,
+  });
+
+  const [messages, setMessages] = useState({
+    slack: "",
+    twitter: "",
+    facebook: "",
+  });
+
   const handleInputChange = (
     platform: keyof Credentials,
     field: string,
@@ -52,73 +64,49 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
     }));
   };
 
-  const saveSlack = async () => {
-    try {
-      const res = await fetch("/api/integrations/slack/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          authorization: "Bearer " + localStorage.getItem("token"),
-        },
-        body: JSON.stringify({
-          workspaceId: credentials.slack.workspaceId,
-          botToken: credentials.slack.botToken,
-          userToken: credentials.slack.userToken,
-          channels: credentials.slack.channels,
-        }),
-      });
-      const data = await res.json();
-      alert(data.message || data.error);
-    } catch (err) {
-      console.error("Failed to save Slack credentials:", err);
-    }
-  };
+  const handleSave = async (
+    platform: keyof Credentials,
+    url: string,
+    body: any
+  ) => {
+    setLoading((prev) => ({ ...prev, [platform]: true }));
+    setMessages((prev) => ({ ...prev, [platform]: "" }));
 
-  const saveTwitter = async () => {
     try {
-      const res = await fetch("/api/integrations/twitter/connect", {
+      const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           authorization: "Bearer " + localStorage.getItem("token"),
         },
-        body: JSON.stringify({
-          appKey: credentials.twitter.apiKey,
-          appSecret: credentials.twitter.apiSecret,
-          accessToken: credentials.twitter.accessToken,
-          accessSecret: credentials.twitter.accessSecret,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      alert(data.message || data.error);
-    } catch (err) {
-      console.error("Failed to save Twitter credentials:", err);
-    }
-  };
+      setMessages((prev) => ({
+        ...prev,
+        [platform]: data.message || data.error || "Unknown response",
+      }));
 
-  const saveFacebook = async () => {
-    try {
-      const res = await fetch("/api/integrations/facebook/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          authorization: "Bearer " + localStorage.getItem("token"),
-        },
-        body: JSON.stringify({
-          pageId: credentials.facebook.pageId,
-          accessToken: credentials.facebook.pageAccessToken,
-        }),
-      });
-      const data = await res.json();
-      alert(data.message || data.error);
+      // Clear fields after submission
+      setCredentials((prev) => ({
+        ...prev,
+        [platform]: Object.fromEntries(
+          Object.keys(prev[platform]).map((key) => [key, ""])
+        ) as any,
+      }));
     } catch (err) {
-      console.error("Failed to save Facebook credentials:", err);
+      console.error(`Failed to save ${platform} credentials:`, err);
+      setMessages((prev) => ({
+        ...prev,
+        [platform]: "Failed to connect. Please try again.",
+      }));
+    } finally {
+      setLoading((prev) => ({ ...prev, [platform]: false }));
     }
   };
 
   return (
     <>
-      {/* Overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -126,13 +114,11 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
       <div
         className={`fixed top-0 right-0 h-full w-96 bg-gray-900/95 backdrop-blur-xl border-l border-gray-700/50
         transform transition-transform duration-300 z-50 shadow-2xl
         ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
-        {/* Header */}
         <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Credentials</h2>
           <button
@@ -143,7 +129,6 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Content */}
         <div className="p-4 space-y-6 overflow-y-auto h-[calc(100%-4rem)]">
           {/* Slack */}
           <Card>
@@ -167,6 +152,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               <InputGroup
                 id="slack-workspace-id"
                 label="Workspace ID"
+                type="password"
                 placeholder="T1234567890"
                 value={credentials.slack.workspaceId}
                 onChange={(e) =>
@@ -186,15 +172,30 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               <InputGroup
                 id="slack-channels"
                 label="Channels"
+                type="password"
                 placeholder="general,announcements"
                 value={credentials.slack.channels}
                 onChange={(e) =>
                   handleInputChange("slack", "channels", e.target.value)
                 }
               />
+              <Button
+                onClick={() =>
+                  handleSave("slack", "/api/integrations/slack/connect", {
+                    workspaceId: credentials.slack.workspaceId,
+                    botToken: credentials.slack.botToken,
+                    userToken: credentials.slack.userToken,
+                    channels: credentials.slack.channels,
+                  })
+                }
+              >
+                {loading.slack ? "Saving..." : "Save Credentials"}
+              </Button>
+              {messages.slack && (
+                <p className="mt-2 text-sm text-gray-300">{messages.slack}</p>
+              )}
             </CardContent>
           </Card>
-          <Button onClick={saveSlack}>Save Slack Credentials</Button>
           <Separator />
 
           {/* Twitter */}
@@ -209,6 +210,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               <InputGroup
                 id="twitter-api-key"
                 label="API Key"
+                type="password"
                 placeholder="Your Twitter API Key"
                 value={credentials.twitter.apiKey}
                 onChange={(e) =>
@@ -245,9 +247,23 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                   handleInputChange("twitter", "accessSecret", e.target.value)
                 }
               />
+              <Button
+                onClick={() =>
+                  handleSave("twitter", "/api/integrations/twitter/connect", {
+                    appKey: credentials.twitter.apiKey,
+                    appSecret: credentials.twitter.apiSecret,
+                    accessToken: credentials.twitter.accessToken,
+                    accessSecret: credentials.twitter.accessSecret,
+                  })
+                }
+              >
+                {loading.twitter ? "Saving..." : "Save Credentials"}
+              </Button>
+              {messages.twitter && (
+                <p className="mt-2 text-sm text-gray-300">{messages.twitter}</p>
+              )}
             </CardContent>
           </Card>
-          <Button onClick={saveTwitter}>Save X Credentials</Button>
           <Separator />
 
           {/* Facebook */}
@@ -262,6 +278,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
               <InputGroup
                 id="facebook-page-id"
                 label="Page ID"
+                type="password"
                 placeholder="Your Facebook Page ID"
                 value={credentials.facebook.pageId}
                 onChange={(e) =>
@@ -282,9 +299,23 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                   )
                 }
               />
+              <Button
+                onClick={() =>
+                  handleSave("facebook", "/api/integrations/facebook/connect", {
+                    pageId: credentials.facebook.pageId,
+                    accessToken: credentials.facebook.pageAccessToken,
+                  })
+                }
+              >
+                {loading.facebook ? "Saving..." : "Save Credentials"}
+              </Button>
+              {messages.facebook && (
+                <p className="mt-2 text-sm text-gray-300">
+                  {messages.facebook}
+                </p>
+              )}
             </CardContent>
           </Card>
-          <Button onClick={saveFacebook}>Save Facebook Credentials</Button>
         </div>
       </div>
     </>
