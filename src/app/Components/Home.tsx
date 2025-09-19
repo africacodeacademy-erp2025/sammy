@@ -2,20 +2,34 @@
 import React, { useState, useRef, useEffect } from "react";
 import Login from "./Login";
 import Register from "./Register";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [view, setView] = useState<"home" | "login" | "register">("home");
+  const [hasToken, setHasToken] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
+  // Check for JWT on mount
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) setHasToken(true);
+  }, []);
+
+  // Scroll to form when view changes
   useEffect(() => {
     if (view !== "home" && formRef.current) {
-      // scroll slightly above so it looks centered nicely
       const offset = 50;
       const top =
         formRef.current.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({ top, behavior: "smooth" });
     }
   }, [view]);
+
+  const handleContinue = () => {
+    // Navigate or perform an action with the token
+    router.push("/chatbot");
+  };
 
   return (
     <div className="w-full bg-gray-950 text-white flex flex-col">
@@ -30,18 +44,29 @@ export default function Home() {
             platforms — all from one place.
           </p>
           <div className="flex gap-4 mt-6">
-            <button
-              onClick={() => setView("login")}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-semibold shadow-md"
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setView("register")}
-              className="px-6 py-3 rounded-xl border border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white transition-all font-semibold shadow-md"
-            >
-              Register
-            </button>
+            {!hasToken ? (
+              <>
+                <button
+                  onClick={() => setView("login")}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-semibold shadow-md"
+                >
+                  Login
+                </button>
+                <button
+                  onClick={() => setView("register")}
+                  className="px-6 py-3 rounded-xl border border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white transition-all font-semibold shadow-md"
+                >
+                  Register
+                </button>
+              </>
+            ) : (
+              <button
+                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
+                onClick={handleContinue}
+              >
+                Continue
+              </button>
+            )}
           </div>
         </div>
 
@@ -56,16 +81,22 @@ export default function Home() {
       </section>
 
       {/* Login/Register Form Section */}
-      {view !== "home" && (
+      {!hasToken && view !== "home" && (
         <div
           ref={formRef}
           className="px-8 md:px-16 py-16 mb-20 max-w-xl mx-auto flex flex-col gap-8"
         >
           {view === "login" && (
-            <Login onSwitchToRegister={() => setView("register")} />
+            <Login
+              onSwitchToRegister={() => setView("register")}
+              onLoginSuccess={() => setHasToken(true)}
+            />
           )}
           {view === "register" && (
-            <Register onSwitchToLogin={() => setView("login")} />
+            <Register
+              onSwitchToLogin={() => setView("login")}
+              onRegisterSuccess={() => setHasToken(true)}
+            />
           )}
         </div>
       )}
@@ -105,20 +136,22 @@ export default function Home() {
           Experience effortless social media management with SaMMy. Sign up now
           and transform your online presence.
         </p>
-        <div className="flex gap-4 mt-4">
-          <button
-            onClick={() => setView("register")}
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-semibold shadow-md"
-          >
-            Register
-          </button>
-          <button
-            onClick={() => setView("login")}
-            className="px-6 py-3 rounded-xl border border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white transition-all font-semibold shadow-md"
-          >
-            Login
-          </button>
-        </div>
+        {!hasToken && (
+          <div className="flex gap-4 mt-4">
+            <button
+              onClick={() => setView("register")}
+              className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-semibold shadow-md"
+            >
+              Register
+            </button>
+            <button
+              onClick={() => setView("login")}
+              className="px-6 py-3 rounded-xl border border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white transition-all font-semibold shadow-md"
+            >
+              Login
+            </button>
+          </div>
+        )}
       </section>
 
       <footer className="p-6 text-center text-gray-500 border-t border-gray-800">

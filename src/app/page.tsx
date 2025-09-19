@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import Chatbot from "./Components/Home";
+import Home from "./Components/Home";
 
 export default function Page() {
-  return <Chatbot />;
+  return <Home />;
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 
 type LoginProps = {
   onSwitchToRegister: () => void;
+  onLoginSuccess?: () => void;
 };
 
 export default function Login({ onSwitchToRegister }: LoginProps) {
