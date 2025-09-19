@@ -3,6 +3,7 @@ import React, { useState } from "react";
 
 type RegisterProps = {
   onSwitchToLogin: () => void;
+  onRegisterSuccess?: () => void;
 };
 
 export default function Register({ onSwitchToLogin }: RegisterProps) {

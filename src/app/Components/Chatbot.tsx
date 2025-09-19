@@ -352,7 +352,7 @@ export default function ChatBot() {
           <div className="flex flex-row gap-2">
             <textarea
               ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900/90 text-white placeholder-white/60"
+              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900 text-white placeholder-white/60"
               placeholder={
                 hasRequiredCredentials
                   ? "Instruct SaMMy..."
@@ -362,7 +362,7 @@ export default function ChatBot() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={loading || !hasRequiredCredentials} 
+              disabled={loading || !hasRequiredCredentials}
             />
 
             {/* Send Button */}
