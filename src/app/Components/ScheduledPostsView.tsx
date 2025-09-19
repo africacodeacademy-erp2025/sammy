@@ -99,6 +99,12 @@ export default function ScheduledPostView({
     }
   };
 
+  const handleEditSave = (id: string, content: string) => {
+    setReadyForReviewPosts((prev) =>
+      prev.map((p) => (p._id === id ? { ...p, post: content } : p))
+    );
+  };
+
   useEffect(() => {
     fetchPosts();
     const fetchInterval = setInterval(fetchPosts, 60 * 1000);
@@ -329,6 +335,7 @@ export default function ScheduledPostView({
                       isLatestAiMessage={
                         index === readyForReviewPosts.length - 1
                       }
+                      onEditSave={handleEditSave}
                     />
                   ))}
                 </div>
