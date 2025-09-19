@@ -1,5 +1,6 @@
 "use client";
-import React, { useState } from "react";
+import { useState } from "react";
+import PasswordInput from "./UI/PasswordInput";
 
 type RegisterProps = {
   onSwitchToLogin: () => void;
@@ -29,8 +30,9 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
       if (!res.ok) throw new Error(data.error || "Registration failed");
 
       onSwitchToLogin();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Registration failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -49,15 +51,13 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <input
-        type="password"
+      <PasswordInput
         placeholder="Password"
         className="w-full mb-4 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <input
-        type="password"
+      <PasswordInput
         placeholder="Confirm Password"
         className="w-full mb-4 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
         value={confirmPassword}

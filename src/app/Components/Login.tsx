@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import PasswordInput from "./UI/PasswordInput";
 
 type LoginProps = {
   onSwitchToRegister: () => void;
@@ -28,8 +29,9 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
       localStorage.setItem("token", data.token);
 
       router.push("/chatbot");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Login failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -46,8 +48,7 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <input
-        type="password"
+      <PasswordInput
         placeholder="Password"
         className="w-full mb-4 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
         value={password}
