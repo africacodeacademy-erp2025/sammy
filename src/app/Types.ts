@@ -30,4 +30,5 @@ export interface MessageBubbleProps {
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   isLatestAiMessage: boolean;
+  onEditSave?: (id: string, content: string) => void;
 }

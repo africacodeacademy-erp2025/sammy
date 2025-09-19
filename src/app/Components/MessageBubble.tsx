@@ -7,6 +7,7 @@ export default function MessageBubble({
   onApprove,
   onReject,
   isLatestAiMessage,
+  onEditSave,
 }: MessageBubbleProps) {
   const isUser = message.sender === "user";
   const [isVisible, setIsVisible] = useState(false);
@@ -22,8 +23,14 @@ export default function MessageBubble({
     }
   }, [isLatestAiMessage]);
 
+  useEffect(() => {
+    setEditedContent(message.content);
+  }, [message.content]);
+
   const handleSaveEdit = () => {
-    message.content = editedContent;
+    if (onEditSave) {
+      onEditSave(message.id, editedContent);
+    }
     setIsEditing(false);
   };
 
@@ -134,7 +141,7 @@ export default function MessageBubble({
         }`}
       >
         <div className="whitespace-pre-wrap break-words">
-          {isEditing ? editedContent : message.content}
+          {editedContent}
         </div>
 
         <div className="flex justify-between items-center mt-2">
