@@ -72,10 +72,9 @@ export default function Home() {
 
         <div className="flex-1 flex justify-center items-center">
           <img
-            src="/SaMMy.png"
+            src="/SHome.jpg"
             alt="SaMMy AI Bot"
-            className="w-80 md:w-96 animate-bounce"
-            style={{ animationDuration: "2s" }}
+            className="w-80 md:w-96 rounded-md shadow-lg"
           />
         </div>
       </section>
