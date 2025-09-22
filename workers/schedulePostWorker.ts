@@ -39,6 +39,7 @@ const worker = new Worker(
             threadId: result.threadId,
             platform: state.platform,
             status: "ready_for_review",
+            isScheduled: true,
             updatedAt: new Date(),
           },
         }

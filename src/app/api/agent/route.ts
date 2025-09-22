@@ -7,6 +7,7 @@ import { facebookPosting } from "../../../../lib/platforms/facebookPosting";
 import { connectDB } from "../../../../lib/mongo";
 import { getUserFromRequest } from "../../../../lib/auth";
 import { decrypt } from "../../../../lib/crypto";
+import { ObjectId } from "mongodb";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
@@ -292,8 +293,8 @@ export async function PUT(req: NextRequest) {
     }
 
     const userId = user._id.toString();
+    const { post, platform, threadId, isScheduled, _id } = await req.json();
 
-    const { post, platform, threadId } = await req.json();
     const detectedPlatform = detectPlatform(post, platform);
     if (!detectedPlatform || detectedPlatform === "unsupported") {
       return NextResponse.json(
@@ -310,10 +311,7 @@ export async function PUT(req: NextRequest) {
         { status: 404 }
       );
     }
-    console.log(
-      `What's stored in the database: ${userDoc.facebook.accessToken}\n`
-    );
-    console.log(`After dycryption: ${decrypt(userDoc.facebook.accessToken)}\n`);
+
     const tokens = {
       twitter: userDoc?.twitter
         ? {
@@ -333,6 +331,7 @@ export async function PUT(req: NextRequest) {
         ? decrypt(userDoc.slack.userToken)
         : null,
     };
+
     const authHeader = req.headers.get("authorization") ?? "";
     const postResult = await postApp.invoke({
       post,
@@ -345,6 +344,14 @@ export async function PUT(req: NextRequest) {
 
     if (postResult.error) {
       return NextResponse.json(postResult, { status: 500 });
+    }
+
+    // Delete scheduled post only if it exists and was scheduled
+    if (postResult.success && isScheduled && _id) {
+      await db
+        .collection("scheduledPosts")
+        .deleteOne({ _id: new ObjectId(_id) });
+      console.log(`Scheduled post ${_id} deleted after successful posting.`);
     }
 
     return NextResponse.json({

@@ -56,7 +56,7 @@ export default function ScheduledPostView({
       console.error("Failed to fetch scheduled posts", err);
     } finally {
       setLoading(false);
-      setRefreshCountdown(60); // reset countdown after fetch
+      setRefreshCountdown(60);
     }
   }, [initialPosts, token]);
 
