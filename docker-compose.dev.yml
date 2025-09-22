@@ -1,0 +1,13 @@
+services:
+  sammy-app:
+    container_name: sammy-app
+    build:
+      dockerfile: Dockerfile.dev
+    # Enable hot reload with volume mounts for development
+    volumes:
+      - ./src:/app/src
+      - ./lib:/app/lib
+      - ./models:/app/models
+      - ./workers:/app/workers
+      - ./public:/app/public
+    restart: always

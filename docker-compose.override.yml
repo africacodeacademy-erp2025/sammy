@@ -1,13 +1,25 @@
 services:
   sammy-app:
-    container_name: sammy-app
+    container_name: sammy-app-prod
     build:
-      dockerfile: Dockerfile.dev
-    # Enable hot reload with volume mounts for development
-    volumes:
-      - ./src:/app/src
-      - ./lib:/app/lib
-      - ./models:/app/models
-      - ./workers:/app/workers
-      - ./public:/app/public
-    restart: always
+      dockerfile: Dockerfile.prod
+      args:
+        # Pass environment variables as build args using correct names from .env.local
+        NODE_ENV: production
+        MONGO_URI: ${MONGO_URI}
+        DATABASE_NAME: ${DATABASE_NAME}
+        JWT_SECRET: ${JWT_SECRET}
+        OPENAI_API_KEY: ${OPEN_AI_API}
+        REDIS_URL: ${REDIS_URL}
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
+        JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+        ENC_SECRET: ${ENC_SECRET}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - sammy_network
+
+networks:
+  sammy_network:
+    name: sammy_production_network
