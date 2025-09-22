@@ -310,7 +310,10 @@ export async function PUT(req: NextRequest) {
         { status: 404 }
       );
     }
-
+    console.log(
+      `What's stored in the database: ${userDoc.facebook.accessToken}\n`
+    );
+    console.log(`After dycryption: ${decrypt(userDoc.facebook.accessToken)}\n`);
     const tokens = {
       twitter: userDoc?.twitter
         ? {
@@ -330,7 +333,6 @@ export async function PUT(req: NextRequest) {
         ? decrypt(userDoc.slack.userToken)
         : null,
     };
-
     const authHeader = req.headers.get("authorization") ?? "";
     const postResult = await postApp.invoke({
       post,
