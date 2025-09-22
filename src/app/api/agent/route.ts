@@ -118,8 +118,23 @@ export async function generatePost(
       ])
       .toArray();
 
+    // Only use context with a score above a relevance threshold
+    const RELEVANCE_THRESHOLD = 0.65;
+    const relevantResults = results.filter(
+      (d) => d.score >= RELEVANCE_THRESHOLD
+    );
     const context =
-      results.length > 0 ? results.map((d) => `- ${d.text}`).join("\n") : "";
+      relevantResults.length > 0
+        ? relevantResults.map((d) => `- ${d.text}`).join("\n")
+        : "";
+
+    // If no relevant context, do not generate a post
+    if (!context) {
+      return {
+        success: false,
+        error: "No relevant information found to generate a post.",
+      };
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",

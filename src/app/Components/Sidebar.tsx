@@ -41,12 +41,6 @@ export default function Sidebar({
     localStorage.removeItem("token");
     setUserEmail(null);
 
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (err) {
-      console.error("Logout request failed", err);
-    }
-
     window.location.href = "/";
   };
 

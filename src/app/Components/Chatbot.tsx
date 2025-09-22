@@ -282,7 +282,7 @@ export default function ChatBot() {
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-4 pb-40 sm:pb-44 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
+        <div className="flex-1 flex flex-col overflow-y-auto overscroll-y-contain p-4 pb-40 sm:pb-44 scroll-pb-32 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           {messages.length === 0 && (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-white/60">
               <div className="text-center max-w-md mb-8">
@@ -348,11 +348,11 @@ export default function ChatBot() {
         </div>
 
         {/* Input Area */}
-        <div className="w-full max-w-full sm:max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-4 pb-4 z-20">
-          <div className="flex flex-row gap-2">
+        <div className="w-full max-w-full sm:max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-2 pb-[calc(1.5rem+env(safe-area-inset-bottom))] z-20">
+          <div className="flex flex-row items-end gap-2 w-full">
             <textarea
               ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900 text-white placeholder-white/60"
+              className="flex-1 rounded-3xl px-4 py-4 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900 text-white placeholder-white/60 w-full min-h-[48px]"
               placeholder={
                 hasRequiredCredentials
                   ? "Instruct SaMMy..."
@@ -363,13 +363,15 @@ export default function ChatBot() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading || !hasRequiredCredentials}
+              style={{ touchAction: "manipulation" }}
             />
 
             {/* Send Button */}
             <button
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 py-3 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md"
+              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 h-12 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center min-w-[90px] shadow-md w-full sm:w-auto"
               disabled={loading || !input.trim() || !hasRequiredCredentials}
               onClick={sendMessage}
+              style={{ touchAction: "manipulation" }}
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
