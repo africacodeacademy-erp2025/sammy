@@ -90,6 +90,10 @@ ENV JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
 ARG ENC_SECRET
 ENV ENC_SECRET=${ENC_SECRET}
 
+# Configure Next.js to bind to all interfaces (required for Docker)
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
 USER nextjs
 
 EXPOSE 3000

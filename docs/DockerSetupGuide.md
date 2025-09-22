@@ -22,8 +22,9 @@ This project uses a multi-environment Docker setup with:
 ```
 ├── Dockerfile.dev              # Development Dockerfile
 ├── Dockerfile.prod             # Production Dockerfile
-├── docker-compose.dev.yml     # Development compose configuration
-├── docker-compose.prod.yml    # Production compose configuration
+├── docker-compose.yml          # Base configuration
+├── docker-compose.override.yml # Development overrides
+├── docker-compose.prod.yml     # Production overrides
 ├── .env.development            # Development environment variables
 └── next.config.mjs             # Must include output: 'standalone'
 ```
@@ -188,7 +189,7 @@ ENV NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}
 CMD ["node", "server.js"]
 ```
 
-### 3. Development Docker Compose (`docker-compose.dev.yml`)
+### 3. Development Docker Compose (`docker-compose.override.yml`)
 
 ```yaml
 services:
@@ -257,6 +258,45 @@ networks:
   production_network:
 ```
 
+## Docker Setup
+
+This project uses a base + override Docker Compose structure for better organization and flexibility.
+
+### File Structure
+
+- `docker-compose.yml` - Base configuration shared by all environments
+- `docker-compose.override.yml` - Development overrides (auto-loaded by default)
+- `docker-compose.prod.yml` - Production overrides
+
+### Usage
+
+#### Development (Default)
+
+Docker Compose automatically loads `docker-compose.yml` + `docker-compose.override.yml`:
+
+```bash
+docker-compose up --build
+```
+
+#### Production
+
+Explicitly specify the production override:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+```
+
+#### Dockge Integration
+
+Dockge will automatically pick up `docker-compose.yml` as the base configuration, making it easy to manage through the UI.
+
+### Features
+
+- **Development**: Hot reload with volume mounts for instant code changes
+- **Production**: Optimized builds with environment variables passed as build args
+- **Shared Base**: Common configuration in base file reduces duplication
+- **Environment Variables**: Both environments load from `.env.local`
+
 ## Environment Configuration
 
 ### Development Environment (`.env.development`)
@@ -301,7 +341,7 @@ NEXT_PUBLIC_FIREBASE_PHONE_TESTING=true
 1. **Start the development environment:**
 
    ```bash
-   docker-compose -f docker-compose.dev.yml up --build
+   docker-compose up --build
    ```
 
 2. **Access the application:**
@@ -311,7 +351,7 @@ NEXT_PUBLIC_FIREBASE_PHONE_TESTING=true
 
 3. **Stop the development environment:**
    ```bash
-   docker-compose -f docker-compose.dev.yml down
+   docker-compose down
    ```
 
 ### Production Mode
@@ -319,18 +359,18 @@ NEXT_PUBLIC_FIREBASE_PHONE_TESTING=true
 1. **Build and start production environment:**
 
    ```bash
-   docker-compose -f docker-compose.prod.yml up --build
+   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build
    ```
 
 2. **Run in detached mode:**
 
    ```bash
-   docker-compose -f docker-compose.prod.yml up -d --build
+   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
    ```
 
 3. **Stop production environment:**
    ```bash
-   docker-compose -f docker-compose.prod.yml down
+   docker-compose down
    ```
 
 ## Package Manager Support
@@ -420,7 +460,7 @@ The production Dockerfile uses a multi-stage build:
 1. **Check container logs:**
 
    ```bash
-   docker-compose -f docker-compose.dev.yml logs -f
+   docker-compose logs -f
    ```
 
 2. **Access container shell:**
@@ -431,7 +471,7 @@ The production Dockerfile uses a multi-stage build:
 
 3. **Rebuild without cache:**
    ```bash
-   docker-compose -f docker-compose.dev.yml build --no-cache
+   docker-compose build --no-cache
    ```
 
 ## Integration with Development Tools
