@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import PasswordInput from "./UI/PasswordInput";
+import { Eye, EyeOff } from "lucide-react";
 
 type RegisterProps = {
   onSwitchToLogin: () => void;
@@ -13,6 +13,8 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleRegister = async () => {
     if (password !== confirmPassword) {
@@ -40,11 +42,10 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
   };
 
   return (
-    <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg w-full max-w-md backdrop-blur-sm">
-      <h2 className="text-2xl font-bold text-white mb-6 text-center">
-        Create Account
-      </h2>
+    <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg backdrop-blur-sm w-full max-w-md lg:w-[460px] lg:h-[350px]">
+      <h2 className="text-2xl font-bold text-white mb-6 text-center">Create Account</h2>
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
       <input
         type="email"
         placeholder="Email"
@@ -52,18 +53,41 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <PasswordInput
-        placeholder="Password"
-        className="w-full mb-4 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <PasswordInput
-        placeholder="Confirm Password"
-        className="w-full mb-4 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-      />
+
+      <div className="relative mb-4">
+        <input
+          type={showPassword ? "text" : "password"}
+          placeholder="Password"
+          className="w-full p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+
+      <div className="relative mb-4">
+        <input
+          type={showConfirmPassword ? "text" : "password"}
+          placeholder="Confirm Password"
+          className="w-full p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
+        <button
+          type="button"
+          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+        >
+          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+
       <button
         onClick={handleRegister}
         disabled={loading}
@@ -75,6 +99,7 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
           "Register"
         )}
       </button>
+
       <p className="text-white/60 mt-4 text-center text-sm">
         Already have an account?{" "}
         <button
