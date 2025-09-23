@@ -323,8 +323,10 @@ export default function ChatBot() {
           ))}
 
           {isTyping && (
-            <div className="flex justify-start">
-              <div className="max-w-full sm:max-w-[80%] rounded-2xl p-4 bg-gray-800/80 text-white backdrop-blur-sm border border-gray-700/50">
+            <div className="flex justify-start mt-3 mb-4">
+              {" "}
+              {/* top margin so it doesn't touch previous message, bottom margin to separate from input */}
+              <div className="max-w-full sm:max-w-[80%] rounded-2xl p-3 bg-gray-800/80 text-white backdrop-blur-sm border border-gray-700/50">
                 <div className="flex items-center gap-2 text-white/70">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce"></div>
@@ -344,7 +346,7 @@ export default function ChatBot() {
           )}
 
           <div ref={messagesEndRef} />
-          <div className="absolute bottom-0 left-0 w-full h-64 sm:h-72 bg-gradient-to-t from-gray-950 via-gray-950/90 via-gray-950/50 to-transparent pointer-events-none" />
+          <div className="fixed bottom-0 left-0 w-full h-64 sm:h-72 bg-gradient-to-t from-gray-950 via-gray-950/90 via-gray-950/50 to-transparent pointer-events-none z-0 sm:z-0" />
         </div>
 
         {/* Input Area */}
@@ -353,11 +355,11 @@ export default function ChatBot() {
             {/* Textarea */}
             <textarea
               ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 py-4 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px]"
+              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px] h-12"
               placeholder={
                 hasRequiredCredentials
                   ? "Instruct SaMMy..."
-                  : "Add Slack, Twitter, and Facebook credentials to chat"
+                  : "Add sources and platforms credentials to chat"
               }
               rows={1}
               value={input}
@@ -369,7 +371,7 @@ export default function ChatBot() {
 
             {/* Send Button */}
             <button
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-5 h-12 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[70px] sm:min-w-[90px]"
+              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3 h-12 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[90px]"
               disabled={loading || !input.trim() || !hasRequiredCredentials}
               onClick={sendMessage}
               style={{ touchAction: "manipulation" }}
