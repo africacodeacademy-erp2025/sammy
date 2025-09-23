@@ -244,7 +244,7 @@ export default function ChatBot() {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
                 <Image
-                  src="/SaMMy.png"
+                  src="/sammy.png"
                   alt="Logo"
                   fill
                   style={{ objectFit: "cover" }}
