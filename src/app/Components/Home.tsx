@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Login from "./Login";
 import Register from "./Register";
 import { useRouter } from "next/navigation";
+import { metadata } from "../layout";
 
 export default function Home() {
   const [view, setView] = useState<"home" | "login" | "register">("home");
