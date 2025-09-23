@@ -11,3 +11,4 @@ services:
 
 networks:
   sammy_network:
+    name: sammy_production_network

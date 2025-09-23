@@ -10,4 +10,13 @@ services:
       - ./models:/app/models
       - ./workers:/app/workers
       - ./public:/app/public
+      - ./.env:/app/.env:ro                
+    ports:
+      - "3000:3000"
     restart: always
+    networks:
+      - sammy_network
+
+networks:
+  sammy_network:
+    name: sammy_production_network
