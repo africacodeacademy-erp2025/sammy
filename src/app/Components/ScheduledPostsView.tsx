@@ -10,6 +10,7 @@ export interface ScheduledPost {
   platform: string;
   scheduleTime: string;
   status: "scheduled" | "ready_for_review" | string;
+  isScheduled?: boolean;
 }
 
 interface CalendarDay {
@@ -71,9 +72,11 @@ export default function ScheduledPostView({
           Authorization: token ? `Bearer ${token}` : "",
         },
         body: JSON.stringify({
+          _id: postToApprove._id,
           post: postToApprove.post || postToApprove.prompt,
           platform: postToApprove.platform,
           threadId: postToApprove.threadId || null,
+          isScheduled: postToApprove.isScheduled,
         }),
       });
       const data = await res.json();

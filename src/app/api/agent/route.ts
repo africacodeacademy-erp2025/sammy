@@ -240,6 +240,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ---------- PATCH START: Pre-generation relevance check ----------
+    const preGenCheck = await generatePost({
+      prompt,
+      platform: detectedPlatform,
+      userId,
+    });
+    if (!preGenCheck.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Prompt does not contain enough relevant information to schedule a post.",
+        },
+        { status: 400 }
+      );
+    }
+    // ---------- PATCH END ----------
+
     const result = await generateApp.invoke({
       prompt,
       platform: detectedPlatform,
@@ -361,12 +379,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json(postResult, { status: 500 });
     }
 
-    // Delete scheduled post only if it exists and was scheduled
-    if (postResult.success && isScheduled && _id) {
-      await db
-        .collection("scheduledPosts")
-        .deleteOne({ _id: new ObjectId(_id) });
-      console.log(`Scheduled post ${_id} deleted after successful posting.`);
+    if (isScheduled && _id) {
+      const deleteResult = await db.collection("scheduledPosts").deleteOne({
+        _id: new ObjectId(_id),
+      });
+      console.log(`Delete attempted for ${_id}, result:`, deleteResult);
     }
 
     return NextResponse.json({
