@@ -62,9 +62,15 @@ export default function ScheduledPostView({
   }, [initialPosts, token]);
 
   const handleApprove = async (id: string) => {
+    const postToApprove = readyForReviewPosts.find((p) => p._id === id);
+    if (!postToApprove) return;
+
+    // Update status locally to show "posting..."
+    setReadyForReviewPosts((prev) =>
+      prev.map((p) => (p._id === id ? { ...p, status: "posting" } : p))
+    );
+
     try {
-      const postToApprove = readyForReviewPosts.find((p) => p._id === id);
-      if (!postToApprove) return;
       const res = await fetch("/api/agent", {
         method: "PUT",
         headers: {
@@ -80,10 +86,24 @@ export default function ScheduledPostView({
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) return;
-      setReadyForReviewPosts((prev) => prev.filter((p) => p._id !== id));
+
+      if (!res.ok || !data.success) {
+        // Show error if request failed
+        setReadyForReviewPosts((prev) =>
+          prev.map((p) => (p._id === id ? { ...p, status: "error" } : p))
+        );
+        return;
+      }
+
+      // Mark as posted after successful approval
+      setReadyForReviewPosts((prev) =>
+        prev.map((p) => (p._id === id ? { ...p, status: "posted" } : p))
+      );
     } catch (err) {
       console.error("Error approving post:", err);
+      setReadyForReviewPosts((prev) =>
+        prev.map((p) => (p._id === id ? { ...p, status: "error" } : p))
+      );
     }
   };
 
@@ -330,7 +350,16 @@ export default function ScheduledPostView({
                         sender: "ai",
                         content: post.post || post.prompt,
                         timestamp: new Date(post.scheduleTime).getTime(),
-                        status: "pending",
+                        status:
+                          post.status === "ready_for_review"
+                            ? "pending"
+                            : (post.status as
+                                | "scheduled"
+                                | "pending"
+                                | "posting"
+                                | "posted"
+                                | "error"
+                                | "rejected"),
                         platform: post.platform,
                       }}
                       onApprove={handleApprove}

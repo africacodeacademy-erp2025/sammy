@@ -143,6 +143,9 @@ export default function ChatBot() {
     const draft = messages.find((msg) => msg.id === id);
     if (!draft || draft.status !== "pending" || !draft.threadId) return;
 
+    // Show "posting..." immediately
+    updateMessageStatus(id, "posting");
+
     try {
       const res = await fetch("/api/agent", {
         method: "PUT",
@@ -169,6 +172,7 @@ export default function ChatBot() {
         return;
       }
 
+      // After successful posting
       updateMessageStatus(id, "posted");
     } catch (err: unknown) {
       updateMessageStatus(id, "error");
