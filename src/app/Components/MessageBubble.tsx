@@ -39,6 +39,13 @@ export default function MessageBubble({
     setIsEditing(false);
   };
 
+  const handleApprove = () => {
+    // Set local state to show pending immediately
+    if (onApprove) {
+      onApprove(message.id);
+    }
+  };
+
   const statusLabels: Record<string, React.ReactNode> = {
     pending: (
       <div className="flex flex-col gap-2 mt-3 p-3 bg-black/20 rounded-lg border border-white/10">
@@ -82,7 +89,7 @@ export default function MessageBubble({
             </button>
             <button
               className="text-xs p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-              onClick={() => onApprove(message.id)}
+              onClick={handleApprove}
               title="Approve"
             >
               ✅
@@ -96,6 +103,13 @@ export default function MessageBubble({
             </button>
           </div>
         )}
+      </div>
+    ),
+    // NEW: Pending approval status with hourglass spinner
+    pending_approval: (
+      <div className="flex items-center gap-2 mt-2 text-xs text-amber-300 font-medium">
+        <div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
+        <span>⏳ Approval pending...</span>
       </div>
     ),
     scheduled: (
