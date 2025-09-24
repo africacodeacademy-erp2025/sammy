@@ -244,7 +244,8 @@ export default function ChatBot() {
       >
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 z-10 sticky top-0">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+          <div className="flex items-center justify-between gap-3">
+            {/* Logo & Title */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
                 <Image
@@ -258,13 +259,12 @@ export default function ChatBot() {
                 <h1 className="font-bold text-white text-sm sm:text-base">
                   SaMMy
                 </h1>
-                <p className="text-xs text-white/60">
-                  Social Media Content Generator
-                </p>
+                <p className="text-xs text-white/60">Social Media AI Agent</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 mt-2 sm:mt-0">
+            {/* Buttons */}
+            <div className="flex items-center gap-3">
               {messages.length > 0 && (
                 <button
                   onClick={clearChat}
@@ -279,8 +279,6 @@ export default function ChatBot() {
               >
                 <span className="text-sm">◧</span>
               </button>
-
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
             </div>
           </div>
         </div>
@@ -359,7 +357,7 @@ export default function ChatBot() {
             {/* Textarea */}
             <textarea
               ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-32 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px] h-12"
+              className="flex-1 rounded-3xl px-4 h-12 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px]"
               placeholder={
                 hasRequiredCredentials
                   ? "Instruct SaMMy..."
