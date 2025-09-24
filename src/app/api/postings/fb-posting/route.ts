@@ -1,3 +1,4 @@
+// src/app/api/postings/fb-posting/route.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "../../../../../lib/auth";
