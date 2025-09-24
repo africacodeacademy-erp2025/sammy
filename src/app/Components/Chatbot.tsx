@@ -143,7 +143,6 @@ export default function ChatBot() {
     const draft = messages.find((msg) => msg.id === id);
     if (!draft || draft.status !== "pending" || !draft.threadId) return;
 
-    // Show "posting..." immediately
     updateMessageStatus(id, "posting");
 
     try {
@@ -172,7 +171,6 @@ export default function ChatBot() {
         return;
       }
 
-      // After successful posting
       updateMessageStatus(id, "posted");
     } catch (err: unknown) {
       updateMessageStatus(id, "error");
@@ -237,54 +235,46 @@ export default function ChatBot() {
       />
 
       {/* Main Chat Area */}
-      <div
-        className={`flex-1 flex flex-col relative transition-all duration-300 ${
-          sidebarOpen ? "md:ml-64" : ""
-        }`}
-      >
-        {/* Header */}
-        <div className="p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 z-10 sticky top-0">
-          <div className="flex items-center justify-between gap-3">
-            {/* Logo & Title */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
-                <Image
-                  src="/sammy.png"
-                  alt="Logo"
-                  fill
-                  style={{ objectFit: "cover" }}
-                />
-              </div>
-              <div>
-                <h1 className="font-bold text-white text-sm sm:text-base">
-                  SaMMy
-                </h1>
-                <p className="text-xs text-white/60">Social Media AI Agent</p>
-              </div>
+      <div className="flex-1 flex flex-col relative transition-all duration-300">
+        {/* Header (fixed) */}
+        <div className="fixed top-0 left-0 w-full z-30 p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
+              <Image
+                src="/sammy.png"
+                alt="Logo"
+                fill
+                style={{ objectFit: "cover" }}
+              />
             </div>
+            <div>
+              <h1 className="font-bold text-white text-sm sm:text-base">
+                SaMMy
+              </h1>
+              <p className="text-xs text-white/60">Social Media AI Agent</p>
+            </div>
+          </div>
 
-            {/* Buttons */}
-            <div className="flex items-center gap-3">
-              {messages.length > 0 && (
-                <button
-                  onClick={clearChat}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-rose-700/50 text-white hover:bg-rose-700 transition-colors"
-                >
-                  Clear Chat
-                </button>
-              )}
+          <div className="flex items-center gap-3">
+            {messages.length > 0 && (
               <button
-                onClick={toggleSidebar}
-                className="px-3 py-1.5 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center justify-center"
+                onClick={clearChat}
+                className="text-xs px-3 py-1.5 rounded-lg bg-rose-700/50 text-white hover:bg-rose-700 transition-colors"
               >
-                <span className="text-sm">◧</span>
+                Clear
               </button>
-            </div>
+            )}
+            <button
+              onClick={toggleSidebar}
+              className="px-3 py-1.5 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center justify-center"
+            >
+              <span className="text-sm">◧</span>
+            </button>
           </div>
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 flex flex-col overflow-y-auto overscroll-y-contain p-4 pb-40 sm:pb-44 scroll-pb-32 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
+        <div className="flex-1 flex flex-col overflow-y-auto overscroll-y-contain p-4 pt-[80px] pb-40 sm:pb-44 scroll-pb-32 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
           {messages.length === 0 && (
             <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-white/60">
               <div className="text-center max-w-md mb-8">
@@ -326,8 +316,6 @@ export default function ChatBot() {
 
           {isTyping && (
             <div className="flex justify-start mt-3 mb-4">
-              {" "}
-              {/* top margin so it doesn't touch previous message, bottom margin to separate from input */}
               <div className="max-w-full sm:max-w-[80%] rounded-2xl p-3 bg-gray-800/80 text-white backdrop-blur-sm border border-gray-700/50">
                 <div className="flex items-center gap-2 text-white/70">
                   <div className="flex space-x-1">
@@ -354,7 +342,6 @@ export default function ChatBot() {
         {/* Input Area */}
         <div className="w-full max-w-full sm:max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-2 pb-[calc(1.5rem+env(safe-area-inset-bottom))] z-20">
           <div className="flex flex-row items-end gap-2 w-full">
-            {/* Textarea */}
             <textarea
               ref={textareaRef}
               className="flex-1 rounded-3xl px-4 h-12 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px]"
@@ -370,8 +357,6 @@ export default function ChatBot() {
               disabled={loading || !hasRequiredCredentials}
               style={{ touchAction: "manipulation" }}
             />
-
-            {/* Send Button */}
             <button
               className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3 h-12 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[90px]"
               disabled={loading || !input.trim() || !hasRequiredCredentials}
