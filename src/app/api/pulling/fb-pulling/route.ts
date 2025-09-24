@@ -5,6 +5,7 @@ import { getUserFromRequest } from "../../../../../lib/auth";
 
 /**
  * Facebook post pulling endpoint using Graph API per user.
+ * Returns only posts from the currently logged-in user.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -33,18 +34,32 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    console.log(`Fetching ${count} posts from Facebook page: ${targetPageId}`);
+    console.log(
+      `Fetching ${count} posts from Facebook page: ${targetPageId} for user: ${user.id}`
+    );
+
+    // Fetch more posts to account for filtering
+    const fetchLimit = Math.min(count * 3, 100); // Fetch 3x more to account for filtering
 
     const url = `https://graph.facebook.com/v21.0/${targetPageId}/feed`;
     const params = new URLSearchParams();
     params.append("access_token", pageAccessToken);
-    params.append("limit", Math.min(count, 100).toString());
-    params.append(
-      "fields",
-      "id,message,story,created_time,updated_time,likes.summary(true),comments.summary(true),shares,permalink_url,full_picture,attachments,from"
-    );
+    params.append("limit", fetchLimit.toString());
+    params.append("fields", "id,message,story,full_picture,from");
 
-    const graphRes = await fetch(`${url}?${params}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
+    const graphRes = await fetch(`${url}?${params}`, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; FacebookAPI/1.0)",
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
     const data = await graphRes.json();
 
     if (!graphRes.ok) {
@@ -60,35 +75,50 @@ export async function GET(req: NextRequest) {
       paging: !!data.paging,
     });
 
-    // Format the response
-    const formattedPosts =
-      data.data?.map((post: any) => ({
+    // Filter posts to only include those from the current user's page
+    // and format the response
+    const userPosts =
+      data.data?.filter((post: any) => post.from?.id === targetPageId) || [];
+
+    const formattedPosts = userPosts
+      .slice(0, count) // Limit to requested count after filtering
+      .map((post: any) => ({
         id: post.id,
         message: post.message || post.story || "",
-        created_time: post.created_time,
-        updated_time: post.updated_time,
         author: {
           id: post.from?.id,
           name: post.from?.name,
         },
-        metrics: {
-          likes_count: post.likes?.summary?.total_count || 0,
-          comments_count: post.comments?.summary?.total_count || 0,
-          shares_count: post.shares?.count || 0,
-        },
-        permalink_url: post.permalink_url,
         full_picture: post.full_picture,
-        attachments: post.attachments?.data || [],
-      })) || [];
+      }));
 
     return NextResponse.json({
       success: true,
       posts: formattedPosts,
       count: formattedPosts.length,
+      total_fetched: data.data?.length || 0,
+      filtered_count: userPosts.length,
       paging: data.paging,
     });
   } catch (error: any) {
     console.error("Error fetching from Facebook:", error);
+
+    // Handle network errors including timeout
+    if (
+      error.code === "ENOTFOUND" ||
+      error.code === "ECONNREFUSED" ||
+      error.code === "UND_ERR_CONNECT_TIMEOUT" ||
+      error.name === "AbortError"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Network error connecting to Facebook API. Please check your internet connection and try again.",
+        },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { error: error?.message || "Something went wrong while fetching posts" },
       { status: 500 }
@@ -127,25 +157,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!targetPageId || !pageAccessToken) {
-      return NextResponse.json(
-        { error: "Facebook credentials not configured for this user" },
-        { status: 400 }
-      );
-    }
-
     console.log(`Fetching ${count} posts from Facebook page: ${targetPageId}`);
+
+    // Fetch more posts to account for filtering
+    const fetchLimit = Math.min(count * 3, 100); // Fetch 3x more to account for filtering
 
     const url = `https://graph.facebook.com/v21.0/${targetPageId}/feed`;
     const params = new URLSearchParams();
     params.append("access_token", pageAccessToken);
-    params.append("limit", Math.min(count, 100).toString());
-    params.append(
-      "fields",
-      "id,message,story,created_time,updated_time,likes.summary(true),comments.summary(true),shares,permalink_url,full_picture,attachments,from"
-    );
+    params.append("limit", fetchLimit.toString());
+    params.append("fields", "id,message,story,full_picture,from");
 
-    const graphRes = await fetch(`${url}?${params}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
+    const graphRes = await fetch(`${url}?${params}`, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; FacebookAPI/1.0)",
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
     const data = await graphRes.json();
 
     if (!graphRes.ok) {
@@ -177,40 +212,46 @@ export async function POST(req: NextRequest) {
       paging: !!data.paging,
     });
 
-    // Format the response
-    const formattedPosts =
-      data.data?.map((post: any) => ({
+    // Filter posts to only include those from the current user's page
+    // and format the response
+    const userPosts =
+      data.data?.filter((post: any) => post.from?.id === targetPageId) || [];
+
+    const formattedPosts = userPosts
+      .slice(0, count) // Limit to requested count after filtering
+      .map((post: any) => ({
         id: post.id,
         message: post.message || post.story || "",
-        created_time: post.created_time,
-        updated_time: post.updated_time,
         author: {
           id: post.from?.id,
           name: post.from?.name,
         },
-        metrics: {
-          likes_count: post.likes?.summary?.total_count || 0,
-          comments_count: post.comments?.summary?.total_count || 0,
-          shares_count: post.shares?.count || 0,
-        },
-        permalink_url: post.permalink_url,
         full_picture: post.full_picture,
-        attachments: post.attachments?.data || [],
-      })) || [];
+      }));
 
     return NextResponse.json({
       success: true,
       posts: formattedPosts,
       count: formattedPosts.length,
+      total_fetched: data.data?.length || 0,
+      filtered_count: userPosts.length,
       paging: data.paging,
     });
   } catch (error: any) {
     console.error("Error fetching from Facebook:", error);
 
-    // Handle network errors
-    if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
+    // Handle network errors including timeout
+    if (
+      error.code === "ENOTFOUND" ||
+      error.code === "ECONNREFUSED" ||
+      error.code === "UND_ERR_CONNECT_TIMEOUT" ||
+      error.name === "AbortError"
+    ) {
       return NextResponse.json(
-        { error: "Network error connecting to Facebook API" },
+        {
+          error:
+            "Network error connecting to Facebook API. Please check your internet connection and try again.",
+        },
         { status: 503 }
       );
     }
