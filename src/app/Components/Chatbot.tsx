@@ -344,7 +344,7 @@ export default function ChatBot() {
           <div className="flex flex-row items-end gap-2 w-full">
             <textarea
               ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 h-12 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px]"
+              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px] text-left"
               placeholder={
                 hasRequiredCredentials
                   ? "Instruct SaMMy..."
@@ -355,10 +355,16 @@ export default function ChatBot() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={loading || !hasRequiredCredentials}
-              style={{ touchAction: "manipulation" }}
+              style={{
+                touchAction: "manipulation",
+                lineHeight: "1.5",
+                paddingTop: "0.75rem",
+                paddingBottom: "0.75rem",
+              }}
             />
+
             <button
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-3 h-12 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[90px]"
+              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 sm:px-4 py-3 min-h-[48px] rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[70px] sm:min-w-[90px]"
               disabled={loading || !input.trim() || !hasRequiredCredentials}
               onClick={sendMessage}
               style={{ touchAction: "manipulation" }}
@@ -367,7 +373,7 @@ export default function ChatBot() {
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <div className="flex items-center gap-1">
-                  <span>Send</span>
+                  <span className="text-sm">Send</span>
                   <span className="text-xs">⏎</span>
                 </div>
               )}
