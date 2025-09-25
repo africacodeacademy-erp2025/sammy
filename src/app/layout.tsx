@@ -15,7 +15,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SaMMy",
   description: "AI powered social media manager",
-  icons: "/sammy.svg",
 };
 
 export default function RootLayout({
