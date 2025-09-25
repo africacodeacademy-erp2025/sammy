@@ -82,7 +82,7 @@ Return a JSON object with key "scheduleTime".
 export async function generatePost(
   state: GraphState
 ): Promise<Partial<GraphState>> {
-  const { prompt, userId } = state;
+  const { prompt, userId, platform } = state;
 
   if (!userId) {
     console.error("Error: userId is missing from graph state.");
@@ -90,12 +90,12 @@ export async function generatePost(
   }
 
   const db = await connectDB();
-  const collection = db.collection("messages");
-
   const queryEmbedding = await getEmbedding(prompt);
 
   try {
-    const results = await collection
+    // --- 1. Retrieve context from Slack messages (RAG) ---
+    const contextResults = await db
+      .collection("messages")
       .aggregate([
         {
           $vectorSearch: {
@@ -118,35 +118,70 @@ export async function generatePost(
       ])
       .toArray();
 
-    // Only use context with a score above a relevance threshold
     const RELEVANCE_THRESHOLD = 0.65;
-    const relevantResults = results.filter(
-      (d) => d.score >= RELEVANCE_THRESHOLD
-    );
-    const context =
-      relevantResults.length > 0
-        ? relevantResults.map((d) => `- ${d.text}`).join("\n")
-        : "";
+    const relevantContext = contextResults
+      .filter((d) => d.score >= RELEVANCE_THRESHOLD)
+      .map((d) => `- ${d.text}`)
+      .join("\n");
 
-    // If no relevant context, do not generate a post
-    if (!context) {
+    // --- 2. Retrieve posting style examples from past_posts ---
+    const styleResults = await db
+      .collection("past_posts")
+      .aggregate([
+        {
+          $vectorSearch: {
+            index: "vector_index",
+            path: "embedding",
+            queryVector: queryEmbedding,
+            numCandidates: 100,
+            limit: 3,
+            filter: { userId: { $eq: userId }, platform: { $eq: platform } },
+          },
+        },
+        {
+          $project: {
+            message: 1,
+            postId: 1,
+            score: { $meta: "vectorSearchScore" },
+          },
+        },
+      ])
+      .toArray();
+
+    const relevantStyle = styleResults
+      .filter((d) => d.score >= RELEVANCE_THRESHOLD)
+      .map((d) => `- ${d.message}`)
+      .join("\n");
+
+    // --- 3. If no relevant context or style, return error ---
+    if (!relevantContext && !relevantStyle) {
       return {
         success: false,
-        error: "No relevant information found to generate a post.",
+        error: "No relevant information or style examples found.",
       };
     }
 
+    // --- 4. Generate post using both context and style ---
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are an expert at writing concise, professional social media posts. Always write as if posting directly to the specified platform.",
+            "You are an expert at writing concise, professional social media posts. " +
+            "Use the context to match the user's tone and style for the specified platform.",
         },
         {
           role: "user",
-          content: `Make a post for ${state.platform}.\n\nContext from your Slack messages:\n${context}\n\nUser request:\n${prompt}`,
+          content:
+            `User request:\n${prompt}\n\n` +
+            (relevantContext
+              ? `Context from Slack messages:\n${relevantContext}\n\n`
+              : "") +
+            (relevantStyle
+              ? `User's past posts for style:\n${relevantStyle}\n\n`
+              : "") +
+            `Write the post in a style consistent with the past posts above for platform: ${platform}.`,
         },
       ],
       max_tokens: 250,
@@ -155,7 +190,7 @@ export async function generatePost(
     return {
       post: completion.choices[0].message?.content ?? "",
       threadId: generateThreadId(),
-      platform: state.platform,
+      platform: platform,
       success: true,
     };
   } catch (dbError: any) {

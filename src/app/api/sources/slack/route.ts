@@ -19,15 +19,23 @@ type MessageDoc = {
 
 export async function GET(req: Request) {
   try {
-    const authHeader = req.headers.get("authorization");
-    const user = await getUserFromRequest(authHeader);
+    const user = await getUserFromRequest(req.headers.get("authorization"));
 
-    if (!user || !user.slack?.userToken || !user.slack.channels?.length) {
+    console.log(user);
+    if (!user || !user.slack?.userToken || !user.slack.channels) {
       return NextResponse.json(
         { success: false, error: "Unauthorized or no Slack credentials" },
         { status: 401 }
       );
     }
+
+    // Ensure channels is always an array of strings
+    const channels: string[] = Array.isArray(user.slack.channels)
+      ? user.slack.channels
+      : (user.slack.channels || "")
+          .split(",")
+          .map((c: string) => c.trim())
+          .filter(Boolean);
 
     const slackUserToken = decrypt(user.slack.userToken);
     const slack = new WebClient(slackUserToken);
@@ -37,7 +45,7 @@ export async function GET(req: Request) {
 
     const results: MessageDoc[] = [];
 
-    for (const channelName of user.slack.channels) {
+    for (const channelName of channels) {
       const list = await slack.conversations.list({ types: "public_channel" });
       const channel = list.channels?.find((c: any) => c.name === channelName);
 
@@ -61,14 +69,14 @@ export async function GET(req: Request) {
       }[]) {
         if (!msg.text || !msg.ts) continue;
 
-        // Check if message already exists
+        // Skip already stored messages
         const existing = await collection.findOne({
           channel: channelName,
           ts: msg.ts,
         });
         if (existing) {
           results.push(existing);
-          continue; // Skip embedding for already stored messages
+          continue;
         }
 
         // Generate embedding only for new messages
@@ -85,7 +93,7 @@ export async function GET(req: Request) {
           text: msg.text,
           ts: msg.ts,
           embedding,
-          userId: user._id.toString(), // <-- save logged-in user
+          userId: String(user._id),
         };
 
         await collection.updateOne(
