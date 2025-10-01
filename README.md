@@ -1,20 +1,20 @@
 # SaMMy – Social Media Content Generator & Posting Orchestrator
 
-SaMMy helps you draft, schedule, and post AI‑generated social media content to Twitter/X and Facebook (with groundwork for Slack context ingestion) using an agent workflow built on LangGraph + OpenAI, backed by MongoDB.
+SaMMy drafts, schedules, and posts AI‑generated social media content to Twitter/X and Facebook, with groundwork for Slack-based context ingestion using MongoDB vector search and LangGraph state machines.
 
 ## Key Features
-- AI drafting with context enrichment (vector search over prior Slack (planned) / stored messages)
+- AI drafting with context enrichment (vector search over user-scoped Slack messages and past posts)
 - Draft → Review → Approve → Post workflow
-- Automatic schedule time extraction (natural language → ISO 8601 UTC)
-- Multi‑platform posting (Twitter/X & Facebook; Slack credential storage)
-- Secure per‑user credential encryption (AES‑256-GCM)
+- Schedule time extraction via LLM (ISO 8601 UTC)
+- Multi‑platform posting (Twitter/X & Facebook)
+- Per‑user credential encryption (AES‑256-GCM)
 - JWT authentication
-- Background worker that materializes scheduled drafts
-- Structured LangGraph state machines for generation & posting
+- BullMQ + Redis worker for delayed scheduled jobs → drafts ready for review
+- LangGraph state machines for generation & posting
 - Post review UI with approve / reject
 - TypeScript + Next.js (App Router) + Turbopack
-- Tailwind CSS styling
-- Jest + Testing Library setup
+- Tailwind CSS
+- Jest + Testing Library
 
 ## Stack
 | Layer | Tech |
@@ -22,60 +22,77 @@ SaMMy helps you draft, schedule, and post AI‑generated social media content to
 | UI / App | Next.js 15 (App Router), React 19 |
 | State Machines | @langchain/langgraph (StateGraph) |
 | AI | OpenAI (chat + embeddings) |
-| DB | MongoDB Atlas (incl. vector index `vector_index`) |
-| Auth | JWT (bcrypt password hashing) |
-| Crypto | AES-256-GCM (token encryption) |
+| DB | MongoDB Atlas (vector index `vector_index`) |
+| Auth | JWT (bcrypt) |
+| Crypto | AES-256-GCM |
 | Integrations | Twitter API v2, Facebook Graph API, Slack Web API |
-| Worker | Node (tsx) interval process |
+| Worker | BullMQ + Redis (tsx worker, delayed jobs) |
 | Tests | Jest + @testing-library/react |
 
-## High-Level Architecture (Text)
+## High-Level Architecture
 1. User authenticates → receives JWT.
-2. User submits a natural language prompt to `/api/agent` (POST).
-3. Platform detection + optional schedule time extraction (LLM).
-4. If schedule time found → store as `scheduled` entry.
-5. Else generate draft post (context via vector search) → return to UI for review.
-6. User approves draft → `/api/agent` (PUT) triggers platform-specific posting node.
-7. Background worker periodically promotes due scheduled prompts into AI-generated drafts for later approval.
+2. User POSTs a natural language prompt to `/api/agent`.
+3. Platform detection + schedule time extraction (LLM). If schedule found → enqueue delayed job.
+4. Otherwise perform vector search over `messages` and `past_posts` → generate a draft for review.
+5. User approves draft via `/api/agent` PUT → platform‑specific posting node runs (Twitter or Facebook).
+6. Worker processes scheduled posts at their time, generating drafts and marking them `ready_for_review`.
+
+Notes:
+- Agent applies a pre‑generation relevance check. If no relevant context/style is found, it returns 400.
 
 ## LangGraph Workflows
-- Generation graph: `extractScheduleTime` → (if scheduled END) else `generatePost`
+- Generation graph: `extractScheduleTime` → if scheduled END else `generatePost`
 - Posting graph: conditional edge → `twitterPosting` or `facebookPosting`
 
 ## Main API Endpoints
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/agent` | Generate draft or schedule post |
-| PUT  | `/api/agent` | Approve & publish a draft |
-| POST | `/api/postings/x-posting` | Internal Twitter post relay |
-| POST | `/api/postings/fb-posting` | Internal Facebook post relay |
+| PUT | `/api/agent` | Approve & publish a draft (optionally clears scheduled row) |
+| POST | `/api/postings/x-posting` | Internal Twitter relay |
+| POST | `/api/postings/fb-posting` | Internal Facebook relay |
 | POST | `/api/auth/signup` | Create user |
 | POST | `/api/auth/signin` | Login (returns JWT) |
 | GET  | `/api/auth/me` | Current user profile |
 | POST | `/api/integrations/twitter/connect` | Store Twitter creds (encrypted) |
 | POST | `/api/integrations/facebook/connect` | Store Facebook creds (encrypted) |
 | POST | `/api/integrations/slack/connect` | Store Slack creds (encrypted) |
-| GET  | `/api/scheduledposts` | (If extended) list scheduled posts (placeholder route present) |
+| GET  | `/api/scheduledposts` | List scheduled posts (basic/placeholder) |
+| POST | `/api/sources/slack` | Ingest Slack messages for embeddings (user-scoped) |
+| POST | `/api/sources/slack/events` | Slack Events endpoint (ingestion) |
+| POST | `/api/pulling/x-pulling` | Pull/embedding helper for Twitter |
+| POST | `/api/pulling/fb-pulling` | Pull/embedding helper for Facebook |
 
 ## Scripts
 ```bash
+# package.json scripts
 npm run dev        # Start Next.js (Turbopack)
 npm run build      # Production build
 npm start          # Start production server
-npm run worker     # Start scheduled posts background worker
-npm test           # Run test suite
 npm run lint       # ESLint
+npm test           # Jest test suite
+npm run test:watch # Jest watch
+```
+
+Worker (no npm script by default):
+```bash
+# run the scheduled-posts worker
+npx tsx workers/schedulePostWorker.ts
+
+# optionally add to package.json:
+# "worker": "tsx workers/schedulePostWorker.ts"
+# then: npm run worker
 ```
 
 ## Environment Variables
 Minimum required (.env):
-```
+```bash
 # Core
 MONGO_URI=mongodb+srv://...
 DATABASE_NAME=sammy
 JWT_SECRET=your_jwt_secret
-JWT_EXPIRES_IN=7d                 # optional (default 7d)
-ENC_SECRET=32_byte_key____________32_byte_key__  # 32 bytes for AES-256-GCM
+JWT_EXPIRES_IN=7d
+ENC_SECRET=32_byte_key____________32_byte_key__   # 32 bytes for AES-256-GCM
 
 # OpenAI
 OPEN_AI_API=sk-...
@@ -83,7 +100,10 @@ OPEN_AI_API=sk-...
 # App
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
-# (Optional) Global platform defaults / bootstrap
+# Redis (BullMQ worker)
+REDIS_URL=rediss://:<password>@<host>:<port>
+
+# (Optional) Platform defaults / bootstrap
 TWITTER_API_KEY=...
 TWITTER_API_SECRET=...
 TWITTER_ACCESS_TOKEN=...
@@ -97,8 +117,9 @@ SLACK_BOT_TOKEN=xoxb-...
 SLACK_USER_TOKEN=xoxp-...
 ```
 Notes:
-- `ENC_SECRET` must be exactly 32 bytes (e.g. generate via `openssl rand -hex 16` then treat carefully).
-- Per-user tokens are stored encrypted; these env vars may seed initial flows.
+- `ENC_SECRET` must be exactly 32 bytes. If omitted, code falls back to `JWT_SECRET`.
+- `NEXT_PUBLIC_BASE_URL` is used by posting helpers to call internal relay endpoints.
+- `REDIS_URL` is required for the BullMQ worker. The worker config enables TLS by default; use a `rediss://` URL or adjust the worker connection if your Redis is plaintext.
 
 ## Data Model (Simplified)
 ```typescript
@@ -118,36 +139,37 @@ Notes:
   _id, userId, text, channel, ts, embedding: number[]
 }
 
+// collection: past_posts (style examples)
+{
+  _id, userId, platform: "twitter" | "facebook", message, embedding: number[]
+}
+
 // collection: scheduledPosts
 {
-  _id, userId, prompt, platform, scheduleTime, status: "scheduled" | "ready_for_review" | "posted",
-  post?, threadId?, createdAt, updatedAt
+  _id, userId, prompt, platform, scheduleTime,
+  status: "scheduled" | "ready_for_review" | "posted",
+  post?, threadId?, isScheduled?, createdAt, updatedAt
 }
 ```
 
-## Security & Privacy
-- Passwords: `bcryptjs` with 10 rounds.
-- JWT: Signed with `JWT_SECRET`, default expiry 7 days.
-- External tokens: Encrypted at rest (AES-256-GCM with `ENC_SECRET`).
-- Vector search: Only queries documents filtered by `userId`.
-- Token extraction in requests always validates Bearer format.
-
 ## Scheduling Flow
-1. User prompt includes time expression (e.g. “tomorrow 10:00 UTC”).
-2. LLM normalizes → `scheduleTime`.
-3. Entry stored as `status = "scheduled"`.
-4. Worker (`npm run worker`) runs every 60s:
-   - Finds due rows.
-   - Generates post draft (no platform dispatch).
-   - Marks `ready_for_review` with generated content.
+1. POST `/api/agent` with a prompt containing a time expression (e.g. “tomorrow 10:00 UTC”).
+2. LLM normalizes to ISO 8601 UTC `scheduleTime`.
+3. A Redis delayed job is enqueued via BullMQ for that time.
+4. The worker picks up the job at execution time:
+   - Runs generation using user context/style.
+   - Updates the Mongo row with generated `post` + `threadId`.
+   - Sets `status = "ready_for_review"` and `isScheduled = true`.
 
-## Example Draft Generation
+## Example Requests
+Draft or schedule:
 ```bash
 curl -X POST http://localhost:3000/api/agent \
   -H "Authorization: Bearer <JWT>" \
   -H "Content-Type: application/json" \
   -d '{"prompt":"Draft a facebook post about our new AI course tomorrow at 09:30 UTC"}'
 ```
+
 Response (scheduled):
 ```json
 {
@@ -157,7 +179,7 @@ Response (scheduled):
 }
 ```
 
-If immediate draft (no time expression):
+Immediate draft (no time expression or not resolved):
 ```json
 {
   "success": true,
@@ -170,56 +192,143 @@ If immediate draft (no time expression):
 }
 ```
 
-## Approving a Draft
+Approve draft (optionally clear scheduled row):
 ```bash
 curl -X PUT http://localhost:3000/api/agent \
-  -H "Authorization: Bearer <JWT>" \
+  -H "Authorization: Bearer <JWT)" \
   -H "Content-Type: application/json" \
-  -d '{"post":"<draft text>","platform":"facebook","threadId":"ab12cd34ef"}'
+  -d '{
+    "post":"<draft text>",
+    "platform":"facebook",
+    "threadId":"ab12cd34ef",
+    "isScheduled": true,
+    "_id": "<scheduledPostId>"
+  }'
 ```
 
 ## Local Development
 ```bash
-cp .env.example .env  # (if you create one)
 npm install
 npm run dev
-# In a second terminal (optional for scheduling)
-npm run worker
+# start worker in another terminal
+npx tsx workers/schedulePostWorker.ts
 ```
 Open http://localhost:3000.
 
-## Testing
-- Unit / component tests: `npm test`
-- Add new tests under `src/**` or co-located; Jest + jsdom configured in `jest.config.js`.
-- Extend mocks in `__mocks__/`.
+Docker notes are in `docs/DockerSetupGuide.md`.
 
-## Linting & Formatting
+## Docker
+
+This repo includes Dockerfiles and Compose files for development and production.
+
+Files:
+- `Dockerfile.dev` – dev image that runs `npm run dev` (Turbopack, hot reload).
+- `Dockerfile.prod` – multi-stage build producing a minimal standalone runner.
+- `docker-compose.dev.yml` – dev Compose with hot-reload volume mounts.
+- `docker-compose.yml` – base Compose (prod).
+- `docker-compose.override.yml` – prod overrides (build args/env, restart policy).
+
+Important OpenAI env note:
+- The code uses `OPEN_AI_API` (see `src/app/api/*`). `Dockerfile.prod` currently references `OPENAI_API_KEY`. To avoid confusion, either:
+  - Set both vars (map `OPEN_AI_API` in your `.env` and pass `OPENAI_API_KEY=$OPEN_AI_API` at build/run), or
+  - Update `Dockerfile.prod` to use `OPEN_AI_API` instead of `OPENAI_API_KEY`.
+
+### Dev (hot reload)
+```bash
+# build & run
+docker compose -f docker-compose.dev.yml up --build
+
+# app available at
+http://localhost:3000
+```
+- The Compose file mounts `src`, `lib`, `models`, `workers`, `public` and `.env` (read-only).
+- To run the worker inside the container:
+```bash
+docker compose -f docker-compose.dev.yml exec sammy-app npx tsx workers/schedulePostWorker.ts
+```
+
+### Prod
+```bash
+# build & run (uses base + override)
+docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
+
+# logs
+docker compose -f docker-compose.yml -f docker-compose.override.yml logs -f
+```
+- Exposes port `3000:3000`.
+- Reads env from `.env` (see Environment Variables section).
+- Next.js is configured to bind to `0.0.0.0` in the runner image.
+
+### Redis for the Worker
+You need a reachable Redis for BullMQ. The worker code currently configures TLS unconditionally and expects a `rediss://` URL:
+```ts
+new IORedis(process.env.REDIS_URL!, { tls: {}, maxRetriesPerRequest: null })
+```
+- Use a managed Redis with TLS (set `REDIS_URL=rediss://...`), or
+- If running a local/plain Redis without TLS, update the worker connection (remove `tls: {}`) or ensure `REDIS_URL` points to a TLS-enabled endpoint.
+
+Example local Redis service (optional):
+```yaml
+# add to your compose file(s)
+services:
+  redis:
+    image: redis/redis-stack-server:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - sammy_network
+# Then use: REDIS_URL=redis://redis:6379
+```
+
+### Running the worker as a service (optional)
+You can add a worker service to Compose so it runs alongside the app:
+```yaml
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev  # or Dockerfile.prod
+    command: npx tsx workers/schedulePostWorker.ts
+    env_file:
+      - .env
+    depends_on:
+      - sammy-app
+      # - redis  # if you added a Redis service
+    networks:
+      - sammy_network
+```
+
+More details and tips are available in `docs/DockerSetupGuide.md`.
+
+## Testing
+```bash
+npm test
+```
+- Jest + jsdom configured in `jest.config.js`.
+- Mocks under `__mocks__/`.
+
+## Linting
 ```bash
 npm run lint
 ```
-Adjust ESLint config in `eslint.config.mjs`.
 
 ## Adding a New Platform (Outline)
-1. Create integration save/retrieve (encrypt credentials) in `lib/integrations/<platform>.ts`.
-2. Create posting helper in `lib/platforms/<platform>Posting.ts`.
-3. Extend `detectPlatform` in `api/agent/route.ts`.
-4. Add node to posting StateGraph with conditional edge.
-5. Adapt UI to expose credential inputs.
+1. Add integration save/retrieve (encrypt credentials) in `lib/integrations/<platform>.ts`.
+2. Add posting helper in `lib/platforms/<platform>Posting.ts`.
+3. Extend platform detection in `src/app/api/agent/route.ts`.
+4. Add a node to the posting StateGraph.
+5. Update UI to collect credentials as needed.
 
 ## Troubleshooting
 | Issue | Fix |
 |-------|-----|
 | 401 Unauthorized | Ensure Bearer token present & valid |
-| Schedule not generating draft | Worker running? `npm run worker` |
-| Encryption errors | Verify `ENC_SECRET` length (32 bytes) |
-| Vector search empty | Ensure Atlas vector index exists & embeddings stored |
-| Posting fails | Verify platform tokens & `NEXT_PUBLIC_BASE_URL` |
-
-## Roadmap Ideas
-- Slack ingestion pipeline for message embeddings
-- Additional platforms (LinkedIn, Instagram)
-- Rich media attachments
-- Admin dashboard for usage analytics
+| 400 from /api/agent | Pre‑generation relevance check failed; add context or seed `messages`/`past_posts` |
+| Worker doesn’t run jobs | Ensure `REDIS_URL` is set and worker is running (`npx tsx workers/schedulePostWorker.ts`) |
+| Redis TLS errors | Use `rediss://` URL or adjust worker connection TLS settings |
+| Encryption errors | Check `ENC_SECRET` length (32 bytes) |
+| Vector search empty | Create Atlas vector index `vector_index` and seed embeddings |
+| Posting fails | Verify platform tokens and `NEXT_PUBLIC_BASE_URL` |
 
 ## Contributing
 1. Fork & branch.
@@ -228,7 +337,7 @@ Adjust ESLint config in `eslint.config.mjs`.
 4. Open PR with concise description.
 
 ## License
-No license specified yet. Add one (e.g. MIT) before public distribution.
+No license specified yet.
 
 ## Disclaimer
-Use responsibly. Ensure compliance with each platform’s API policies.
+Use responsibly and comply with each platform’s API policies.
