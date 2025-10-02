@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SidebarButton from "./UI/SidebarButton";
+import PayButton from "./UI/PayButton";
 
 export default function Sidebar({
   isOpen,
@@ -37,16 +39,14 @@ export default function Sidebar({
 
   const getInitials = (email: string) => email.slice(0, 2).toUpperCase();
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     localStorage.removeItem("token");
     setUserEmail(null);
-
     window.location.href = "/";
   };
 
   return (
     <>
-      {/* Overlay */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -54,7 +54,6 @@ export default function Sidebar({
         />
       )}
 
-      {/* Sidebar */}
       <div
         className={`
           fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700
@@ -82,66 +81,31 @@ export default function Sidebar({
 
         {/* Main Content */}
         <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-          {/* View Schedule */}
-          <button
+          <SidebarButton
             onClick={onViewSchedule}
-            className="w-full flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-800/70 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600/20 rounded-lg">
-                <span className="text-blue-400">📅</span>
-              </div>
-              <div className="text-left">
-                <h3 className="text-sm font-medium text-white">
-                  View Schedule
-                </h3>
-                <p className="text-xs text-gray-400">See upcoming posts</p>
-              </div>
-            </div>
-            <span className="text-gray-400">→</span>
-          </button>
+            title="View Schedule"
+            description="See upcoming posts"
+            icon={<span className="text-blue-400">📅</span>}
+          />
 
-          {/* Manage Credentials */}
-          <button
+          <SidebarButton
             onClick={onManageCredentials}
-            className="w-full flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-800/70 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-600/20 rounded-lg">
-                <span className="text-green-400">🔑</span>
-              </div>
-              <div className="text-left">
-                <h3 className="text-sm font-medium text-white">
-                  Manage Credentials
-                </h3>
-                <p className="text-xs text-gray-400">
-                  Configure API keys & tokens
-                </p>
-              </div>
-            </div>
-            <span className="text-gray-400">→</span>
-          </button>
+            title="Manage Credentials"
+            description="Configure API keys & tokens"
+            icon={<span className="text-green-400">🔑</span>}
+          />
+
+          <PayButton priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID} />
         </div>
 
-        {/* Logout at bottom */}
+        {/* Logout */}
         <div className="p-4 border-t border-gray-700 mt-auto">
-          <button
+          <SidebarButton
             onClick={handleLogout}
-            className="w-full flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-800/70 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-600 rounded-lg">
-                <span className="text-red-400">⇦</span>
-              </div>
-              <div className="text-left">
-                <h3 className="text-sm font-medium text-white">Logout</h3>
-                <p className="text-xs text-gray-400">
-                  Sign out of your account
-                </p>
-              </div>
-            </div>
-            <span className="text-gray-400">→</span>
-          </button>
+            title="Logout"
+            description="Sign out of your account"
+            icon={<span className="text-red-400">⇦</span>}
+          />
         </div>
       </div>
     </>
