@@ -301,11 +301,83 @@ services:
 More details and tips are available in `docs/DockerSetupGuide.md`.
 
 ## Testing
-```bash
-npm test
+
+The project includes comprehensive UI tests covering components, pages, and user interactions.
+
+### Test Structure
 ```
-- Jest + jsdom configured in `jest.config.js`.
-- Mocks under `__mocks__/`.
+__tests__/
+├── ui.test.tsx          # Core UI components (Badge, PasswordInput, InputGroup, Login, Register)
+├── components.test.tsx  # UI library components (Button, Card, Input, Label, MessageBubble)
+└── pages.test.tsx       # Page components (Home, Chatbot)
+```
+
+### Test Commands
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run specific test file
+npm test __tests__/ui.test.tsx
+
+# Run with coverage (if configured)
+npm test -- --coverage
+```
+
+### Test Coverage
+- **32 passing tests** across all components
+- **UI Components**: Badge, PasswordInput, InputGroup with visibility toggles
+- **Authentication**: Login/Register forms with validation and API calls
+- **Core Components**: Button variants, Card styling, Input focus/blur, Label associations
+- **Complex Components**: MessageBubble with edit mode, approval workflow, status indicators
+- **Pages**: Home landing page content, Chatbot interface elements
+
+### Test Configuration
+- **Framework**: Jest + Testing Library React
+- **Environment**: jsdom for DOM testing
+- **Mocking**: Next.js router, fetch API, localStorage, scrollIntoView
+- **TypeScript**: Full type safety without 'any' usage
+- **ESM Support**: Jest configured for ES modules via `jest.config.cjs`
+
+### Key Testing Features
+- User interaction testing (clicks, typing, form submissions)
+- API call mocking and verification
+- Component state changes and side effects
+- Error handling and validation flows
+- Accessibility testing with proper ARIA labels
+- Responsive behavior and conditional rendering
+
+### Adding New Tests
+1. Create test files in `__tests__/` directory
+2. Import components using relative paths (e.g., `'../src/app/Components/MyComponent'`)
+3. Mock external dependencies (router, APIs) as needed
+4. Use Testing Library queries (`getByRole`, `getByText`, etc.)
+5. Test user interactions with `userEvent.setup()`
+6. Verify state changes with `waitFor()` for async operations
+
+### Test Utilities
+- **Mocks**: Global mocks in `jest.setup.ts` (scrollIntoView)
+- **File Mocks**: Static assets mocked via `__mocks__/fileMock.js`
+- **Router Mocking**: Next.js navigation mocked for isolated testing
+- **API Mocking**: Fetch calls mocked with Jest functions
+
+Example test:
+```typescript
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import MyComponent from '../src/app/Components/MyComponent';
+
+it('handles user interaction', async () => {
+  const user = userEvent.setup();
+  render(<MyComponent />);
+
+  await user.click(screen.getByRole('button', { name: 'Submit' }));
+  expect(screen.getByText('Success')).toBeInTheDocument();
+});
+```
 
 ## Linting
 ```bash
