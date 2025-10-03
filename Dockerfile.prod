@@ -45,6 +45,14 @@ ENV OPENAI_API_KEY=${OPENAI_API_KEY}
 ARG REDIS_URL
 ENV REDIS_URL=${REDIS_URL}
 
+# Stripe keys may be needed during build if server modules instantiate Stripe at module load.
+# Provide as build args so build-time code can access them; do NOT set them in the final runner stage.
+ARG STRIPE_SECRET_KEY
+ENV STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+
+ARG STRIPE_PRICE_ID
+ENV STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
+
 # NOTE: do NOT set NEXT_PUBLIC_BASE_URL as a build ARG/ENV here. Instead,
 # supply NEXT_PUBLIC_BASE_URL at runtime (env_file or env) so you avoid
 # accidental quoting / baking the URL into the build.
@@ -82,25 +90,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 RUN chown -R nextjs:nodejs /app/public /app/.next/static || true
 RUN chmod -R u+r /app/public /app/.next/static || true
 
-# Runtime environment vars (these are optional placeholders; you typically supply
-# real values via docker-compose env_file or the runtime environment)
-ARG NODE_ENV
-ENV NODE_ENV=${NODE_ENV}
-ARG MONGO_URI
-ENV MONGO_URI=${MONGO_URI}
-ARG DATABASE_NAME
-ENV DATABASE_NAME=${DATABASE_NAME}
-ARG JWT_SECRET
-ENV JWT_SECRET=${JWT_SECRET}
-ARG OPENAI_API_KEY
-ENV OPENAI_API_KEY=${OPENAI_API_KEY}
-ARG REDIS_URL
-ENV REDIS_URL=${REDIS_URL}
-# Do NOT set NEXT_PUBLIC_BASE_URL here; pass at runtime via env_file/.env
-ARG JWT_EXPIRES_IN
-ENV JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
-ARG ENC_SECRET
-ENV ENC_SECRET=${ENC_SECRET}
+# Runtime environment vars: do NOT bake secrets into the final image.
+# Supply real values at runtime via docker-compose `env_file`, environment
+# variables on the host, or a secrets manager. Avoid ARG/ENV for secrets
+# in the runner stage so they are not stored in the final image layers.
 
 # Configure Next.js to bind to all interfaces (required for Docker)
 ENV HOSTNAME=0.0.0.0
@@ -110,4 +103,7 @@ USER nextjs
 
 EXPOSE 3000
 
+# The standalone Next output provides a `server.js` entrypoint in the
+# standalone folder copied above. Run it and let it pick up runtime env vars
+# (PORT, NEXT_PUBLIC_BASE_URL, STRIPE keys, etc.) from the container environment.
 CMD ["node", "server.js"]

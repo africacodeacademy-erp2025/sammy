@@ -8,12 +8,15 @@ services:
         MONGO_URI: ${MONGO_URI}
         DATABASE_NAME: ${DATABASE_NAME}
         JWT_SECRET: ${JWT_SECRET}
-        OPEN_AI_API: ${OPEN_AI_API}  
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
+        OPEN_AI_API: ${OPEN_AI_API}
         REDIS_URL: ${REDIS_URL}
         JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
         ENC_SECRET: ${ENC_SECRET}
+        STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+        STRIPE_PRICE_ID: ${STRIPE_PRICE_ID}
     env_file:
-      - .env                                
+      - .env
     restart: unless-stopped
     ports:
       - "3000:3000"
