@@ -116,13 +116,28 @@ export default function ChatBot() {
         return;
       }
 
-      addMessage({
-        sender: "ai",
-        content: data.review?.post || data.message,
-        status: data.message ? "scheduled" : "pending",
-        threadId: data.review?.threadId,
-        platform: data.review?.platform,
-      });
+      // Handle different response types
+      if (data.greeting) {
+        addMessage({
+          sender: "ai",
+          content: data.message,
+          // No status for greetings - they don't need action buttons
+        });
+      } else if (data.scheduled) {
+        addMessage({
+          sender: "ai",
+          content: data.message,
+          status: "scheduled",
+        });
+      } else {
+        addMessage({
+          sender: "ai",
+          content: data.review?.post || data.message,
+          status: "pending",
+          threadId: data.review?.threadId,
+          platform: data.review?.platform,
+        });
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error
@@ -287,16 +302,18 @@ export default function ChatBot() {
                   </p>
                   <ul className="text-xs space-y-1 text-gray-400">
                     <li>
+                      • &quot;Hello!&quot; or &quot;What can you do?&quot;
+                    </li>
+                    <li>
                       • &quot;Create a tweet about launching our new
                       branch&quot;
                     </li>
                     <li>
-                      • &quot;Write a linkedin post about our opened
+                      • &quot;Write a facebook post about our opened
                       intake&quot;
                     </li>
                     <li>
-                      • &quot;Draft a facebook promotional post for my product
-                      today at 15:30 Lesotho time&quot;
+                      • &quot;Draft a twitter post for tomorrow at 2pm&quot;
                     </li>
                   </ul>
                 </div>
@@ -348,13 +365,13 @@ export default function ChatBot() {
               placeholder={
                 hasRequiredCredentials
                   ? "Instruct SaMMy..."
-                  : "Add sources and platforms credentials to chat"
+                  : "Instruct SaMMy... (configure sources for curated posts)"
               }
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={loading || !hasRequiredCredentials}
+              disabled={loading}
               style={{
                 touchAction: "manipulation",
                 lineHeight: "1.5",
@@ -365,7 +382,7 @@ export default function ChatBot() {
 
             <button
               className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 sm:px-4 py-3 min-h-[48px] rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[70px] sm:min-w-[90px]"
-              disabled={loading || !input.trim() || !hasRequiredCredentials}
+              disabled={loading || !input.trim()}
               onClick={sendMessage}
               style={{ touchAction: "manipulation" }}
             >

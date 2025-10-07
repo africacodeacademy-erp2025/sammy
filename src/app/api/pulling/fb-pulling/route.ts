@@ -76,14 +76,45 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, posts: [] });
     }
 
-    const messages = newPosts.map((p) => p.message || "");
+    // Filter out posts with empty messages and prepare for embeddings
+    const postsWithMessages = newPosts.filter(
+      (p) => p.message && p.message.trim().length > 0
+    );
+
+    if (postsWithMessages.length === 0) {
+      // If no posts have messages, still save the posts but without embeddings
+      const docs = newPosts.map((post) => ({
+        userId: String(user._id),
+        postId: post.id,
+        message: post.message || "",
+        embedding: null, // No embedding for empty messages
+        platform: "facebook",
+        createdAt: new Date(),
+      }));
+
+      const result = await collection.insertMany(docs);
+      const insertedPosts = docs.map((doc, idx) => ({
+        ...doc,
+        _id: result.insertedIds[idx],
+      }));
+
+      return NextResponse.json({ success: true, posts: insertedPosts });
+    }
+
+    const messages = postsWithMessages.map((p) => p.message!);
     const embeddings = await createEmbeddings(messages);
 
-    const docs = newPosts.map((post, i) => ({
+    // Create a map of postId to embedding for posts with messages
+    const embeddingMap = new Map();
+    postsWithMessages.forEach((post, i) => {
+      embeddingMap.set(post.id, embeddings[i]);
+    });
+
+    const docs = newPosts.map((post) => ({
       userId: String(user._id), // <-- ensure userId is stored as string
       postId: post.id,
       message: post.message || "",
-      embedding: embeddings[i],
+      embedding: embeddingMap.get(post.id) || null,
       platform: "facebook",
       createdAt: new Date(),
     }));

@@ -5,6 +5,7 @@ interface TestButtonProps {
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
+  text?: string;
 }
 
 export default function TestButton({
@@ -12,6 +13,7 @@ export default function TestButton({
   disabled,
   onClick,
   className = "",
+  text = "Test Tokens",
 }: TestButtonProps) {
   return (
     <button
@@ -32,7 +34,7 @@ export default function TestButton({
         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
       ) : (
         <div className="flex items-center gap-1">
-          <span className="text-sm">Test Tokens</span>
+          <span className="text-sm">{text}</span>
           <span className="text-xs">🔌</span>
         </div>
       )}

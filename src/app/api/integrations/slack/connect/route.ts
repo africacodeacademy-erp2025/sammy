@@ -14,11 +14,39 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { workspaceId, botToken, userToken, channels } = body;
 
-    if (!workspaceId && !botToken && !userToken) {
+    // Validate workspaceId
+    if (
+      !workspaceId ||
+      typeof workspaceId !== "string" ||
+      !workspaceId.trim()
+    ) {
+      return NextResponse.json(
+        { error: "Workspace ID is required." },
+        { status: 400 }
+      );
+    }
+
+    // Validate channels
+    let channelArr: string[] = [];
+    if (Array.isArray(channels)) {
+      channelArr = channels.filter((c) => typeof c === "string" && c.trim());
+    } else if (typeof channels === "string") {
+      channelArr = channels
+        .split(",")
+        .map((c: string) => c.trim())
+        .filter(Boolean);
+    }
+    if (!channelArr.length) {
+      return NextResponse.json(
+        { error: "At least one channel must be provided." },
+        { status: 400 }
+      );
+    }
+
+    if (!botToken && !userToken) {
       return NextResponse.json(
         {
-          error:
-            "At least one of workspaceId, botToken, or userToken must be provided",
+          error: "At least one of botToken or userToken must be provided",
         },
         { status: 400 }
       );
@@ -28,7 +56,7 @@ export async function POST(req: Request) {
       workspaceId,
       botToken,
       userToken,
-      channels,
+      channels: channelArr,
     });
 
     return NextResponse.json({ success: true, message: "Slack config saved" });

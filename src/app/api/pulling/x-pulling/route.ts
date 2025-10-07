@@ -109,14 +109,45 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, posts: [] });
     }
 
-    const messages = newTweets.map((t) => t.text || "");
+    // Filter out tweets with empty text and prepare for embeddings
+    const tweetsWithText = newTweets.filter(
+      (t) => t.text && t.text.trim().length > 0
+    );
+
+    if (tweetsWithText.length === 0) {
+      // If no tweets have text, still save the tweets but without embeddings
+      const docs = newTweets.map((tweet) => ({
+        userId: String(user._id),
+        postId: tweet.id,
+        message: tweet.text || "",
+        embedding: null, // No embedding for empty messages
+        platform: "twitter",
+        createdAt: new Date(tweet.created_at || Date.now()),
+      }));
+
+      const result = await collection.insertMany(docs);
+      const insertedPosts = docs.map((doc, idx) => ({
+        ...doc,
+        _id: result.insertedIds[idx],
+      }));
+
+      return NextResponse.json({ success: true, posts: insertedPosts });
+    }
+
+    const messages = tweetsWithText.map((t) => t.text!);
     const embeddings = await createEmbeddings(messages);
 
-    const docs = newTweets.map((tweet, i) => ({
+    // Create a map of postId to embedding for tweets with text
+    const embeddingMap = new Map();
+    tweetsWithText.forEach((tweet, i) => {
+      embeddingMap.set(tweet.id, embeddings[i]);
+    });
+
+    const docs = newTweets.map((tweet) => ({
       userId: String(user._id),
       postId: tweet.id,
       message: tweet.text || "",
-      embedding: embeddings[i],
+      embedding: embeddingMap.get(tweet.id) || null,
       platform: "twitter",
       createdAt: new Date(tweet.created_at || Date.now()),
     }));
