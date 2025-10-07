@@ -104,6 +104,8 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
           Object.keys(prev[platform]).map((key) => [key, ""])
         ) as any,
       }));
+      // Reset verified so Test button reappears after saving
+      setVerified((prev) => ({ ...prev, [platform]: false }));
     } catch (err) {
       console.error(`Failed to save ${platform} credentials:`, err);
       setMessages((prev) => ({
@@ -413,34 +415,35 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 />
 
                 <div className="flex flex-col md:flex-row gap-2 md:gap-3">
-                  <TestButton
-                    className=""
-                    loading={loading.slack}
-                    disabled={loading.slack}
-                    onClick={() =>
-                      handleTest("slack", {
-                        workspaceId: credentials.slack.workspaceId,
-                        botToken: credentials.slack.botToken,
-                        userToken: credentials.slack.userToken,
-                        channels: credentials.slack.channels,
-                      })
-                    }
-                  />
-
-                  <Button
-                    className=""
-                    disabled={!verified.slack}
-                    onClick={() =>
-                      handleSave("slack", "/api/integrations/slack/connect", {
-                        workspaceId: credentials.slack.workspaceId,
-                        botToken: credentials.slack.botToken,
-                        userToken: credentials.slack.userToken,
-                        channels: credentials.slack.channels,
-                      })
-                    }
-                  >
-                    {loading.slack ? "Saving..." : "Save"}
-                  </Button>
+                  {!verified.slack ? (
+                    <TestButton
+                      className=""
+                      loading={loading.slack}
+                      disabled={loading.slack}
+                      onClick={() =>
+                        handleTest("slack", {
+                          workspaceId: credentials.slack.workspaceId,
+                          botToken: credentials.slack.botToken,
+                          userToken: credentials.slack.userToken,
+                          channels: credentials.slack.channels,
+                        })
+                      }
+                    />
+                  ) : (
+                    <Button
+                      className=""
+                      onClick={() =>
+                        handleSave("slack", "/api/integrations/slack/connect", {
+                          workspaceId: credentials.slack.workspaceId,
+                          botToken: credentials.slack.botToken,
+                          userToken: credentials.slack.userToken,
+                          channels: credentials.slack.channels,
+                        })
+                      }
+                    >
+                      {loading.slack ? "Saving..." : "Save"}
+                    </Button>
+                  )}
                 </div>
                 {messages.slack && (
                   <p className="mt-1 text-sm text-gray-300">{messages.slack}</p>
@@ -509,38 +512,39 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                   }
                 />
                 <div className="flex flex-col md:flex-row gap-2 md:gap-3">
-                  <TestButton
-                    className=""
-                    loading={loading.twitter}
-                    disabled={loading.twitter}
-                    onClick={() =>
-                      handleTest("twitter", {
-                        appKey: credentials.twitter.apiKey,
-                        appSecret: credentials.twitter.apiSecret,
-                        accessToken: credentials.twitter.accessToken,
-                        accessSecret: credentials.twitter.accessSecret,
-                      })
-                    }
-                  />
-
-                  <Button
-                    className=""
-                    disabled={!verified.twitter}
-                    onClick={() =>
-                      handleSave(
-                        "twitter",
-                        "/api/integrations/twitter/connect",
-                        {
+                  {!verified.twitter ? (
+                    <TestButton
+                      className=""
+                      loading={loading.twitter}
+                      disabled={loading.twitter}
+                      onClick={() =>
+                        handleTest("twitter", {
                           appKey: credentials.twitter.apiKey,
                           appSecret: credentials.twitter.apiSecret,
                           accessToken: credentials.twitter.accessToken,
                           accessSecret: credentials.twitter.accessSecret,
-                        }
-                      )
-                    }
-                  >
-                    {loading.twitter ? "Saving..." : "Save"}
-                  </Button>
+                        })
+                      }
+                    />
+                  ) : (
+                    <Button
+                      className=""
+                      onClick={() =>
+                        handleSave(
+                          "twitter",
+                          "/api/integrations/twitter/connect",
+                          {
+                            appKey: credentials.twitter.apiKey,
+                            appSecret: credentials.twitter.apiSecret,
+                            accessToken: credentials.twitter.accessToken,
+                            accessSecret: credentials.twitter.accessSecret,
+                          }
+                        )
+                      }
+                    >
+                      {loading.twitter ? "Saving..." : "Save"}
+                    </Button>
+                  )}
                 </div>
                 {messages.twitter && (
                   <p className="mt-1 text-sm text-gray-300">
@@ -595,34 +599,35 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                   }
                 />
                 <div className="flex flex-col md:flex-row gap-2 md:gap-3">
-                  <TestButton
-                    className=""
-                    loading={loading.facebook}
-                    disabled={loading.facebook}
-                    onClick={() =>
-                      handleTest("facebook", {
-                        pageId: credentials.facebook.pageId,
-                        accessToken: credentials.facebook.pageAccessToken,
-                      })
-                    }
-                  />
-
-                  <Button
-                    className=""
-                    disabled={!verified.facebook}
-                    onClick={() =>
-                      handleSave(
-                        "facebook",
-                        "/api/integrations/facebook/connect",
-                        {
+                  {!verified.facebook ? (
+                    <TestButton
+                      className=""
+                      loading={loading.facebook}
+                      disabled={loading.facebook}
+                      onClick={() =>
+                        handleTest("facebook", {
                           pageId: credentials.facebook.pageId,
                           accessToken: credentials.facebook.pageAccessToken,
-                        }
-                      )
-                    }
-                  >
-                    {loading.facebook ? "Saving..." : "Save"}
-                  </Button>
+                        })
+                      }
+                    />
+                  ) : (
+                    <Button
+                      className=""
+                      onClick={() =>
+                        handleSave(
+                          "facebook",
+                          "/api/integrations/facebook/connect",
+                          {
+                            pageId: credentials.facebook.pageId,
+                            accessToken: credentials.facebook.pageAccessToken,
+                          }
+                        )
+                      }
+                    >
+                      {loading.facebook ? "Saving..." : "Save"}
+                    </Button>
+                  )}
                 </div>
                 {messages.facebook && (
                   <p className="mt-1 text-sm text-gray-300">
