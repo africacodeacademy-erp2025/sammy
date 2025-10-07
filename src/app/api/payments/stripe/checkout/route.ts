@@ -1,8 +1,6 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -12,6 +10,9 @@ export async function POST(req: Request) {
     }
 
     const origin = process.env.NEXT_PUBLIC_BASE_URL!;
+
+    // Initialize Stripe at runtime
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
