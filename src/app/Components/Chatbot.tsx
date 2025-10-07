@@ -130,13 +130,30 @@ export default function ChatBot() {
           status: "scheduled",
         });
       } else {
-        addMessage({
-          sender: "ai",
-          content: data.review?.post || data.message,
-          status: "pending",
-          threadId: data.review?.threadId,
-          platform: data.review?.platform,
-        });
+        // Check if user has credentials for the platform
+        if (data.review?.hasCredentials === false) {
+          // User doesn't have credentials for this platform
+          const platformName =
+            data.review?.platform === "twitter"
+              ? "Twitter"
+              : data.review?.platform === "facebook"
+              ? "Facebook"
+              : data.review?.platform;
+          addMessage({
+            sender: "ai",
+            content: `${data.review?.post}\n\n🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
+            // No status - no action buttons since they can't post
+          });
+        } else {
+          // User has credentials - show normal pending status with action buttons
+          addMessage({
+            sender: "ai",
+            content: data.review?.post || data.message,
+            status: "pending",
+            threadId: data.review?.threadId,
+            platform: data.review?.platform,
+          });
+        }
       }
     } catch (err: unknown) {
       const message =
@@ -175,12 +192,28 @@ export default function ChatBot() {
       });
 
       const data = await res.json();
+      console.log("Post response:", { status: res.status, data }); // Debug log
 
-      if (!res.ok || data.error) {
+      // Check for various error conditions
+      if (!res.ok || data.error || data.success === false) {
         updateMessageStatus(id, "error");
         addMessage({
           sender: "ai",
-          content: data.error || `Server responded with ${res.status}`,
+          content:
+            data.error ||
+            `Server responded with ${res.status}: ${res.statusText}`,
+          status: "error",
+        });
+        return;
+      }
+
+      // Verify that the post was actually successful
+      if (!data.posted && !data.success) {
+        updateMessageStatus(id, "error");
+        addMessage({
+          sender: "ai",
+          content:
+            "The post may not have been published successfully. Please check your social media account to verify.",
           status: "error",
         });
         return;
@@ -188,11 +221,12 @@ export default function ChatBot() {
 
       updateMessageStatus(id, "posted");
     } catch (err: unknown) {
+      console.error("Post request failed:", err); // Debug log
       updateMessageStatus(id, "error");
       const message =
         err instanceof Error
-          ? err.message
-          : "Failed to post message. Please try again later.";
+          ? `Network error: ${err.message}`
+          : "Failed to post message due to a network error. Please check your connection and try again.";
       addMessage({
         sender: "ai",
         content: message,

@@ -77,6 +77,156 @@ function isValidISODate(dateString: string): boolean {
   return isoRegex.test(dateString);
 }
 
+function sanitizeForTwitter(text: string): string {
+  // Twitter character limit: 280 characters
+  let sanitized = text.trim();
+
+  // Remove any HTML tags
+  sanitized = sanitized.replace(/<[^>]*>/g, "");
+
+  // Remove potentially problematic characters
+  sanitized = sanitized.replace(/[^\w\s#@.,!?;:()\-'"]/g, "");
+
+  // Ensure hashtags are properly formatted (no spaces, alphanumeric + underscore)
+  sanitized = sanitized.replace(/#[\w\s]+/g, (match) => {
+    const cleaned = match.replace(/\s+/g, "").replace(/[^#\w]/g, "");
+    return cleaned.length > 1 ? cleaned : "";
+  });
+
+  // Ensure mentions are properly formatted
+  sanitized = sanitized.replace(/@[\w\s]+/g, (match) => {
+    const cleaned = match.replace(/\s+/g, "").replace(/[^@\w]/g, "");
+    return cleaned.length > 1 ? cleaned : "";
+  });
+
+  // Clean up multiple spaces and newlines
+  sanitized = sanitized.replace(/\s+/g, " ").replace(/\n+/g, "\n");
+
+  // Remove excessive punctuation
+  sanitized = sanitized.replace(/[.]{3,}/g, "...");
+  sanitized = sanitized.replace(/[!]{2,}/g, "!");
+  sanitized = sanitized.replace(/[?]{2,}/g, "?");
+
+  // Truncate if too long, leaving space for potential link shortening
+  if (sanitized.length > 260) {
+    const truncated = sanitized.substring(0, 257);
+    const lastSpace = truncated.lastIndexOf(" ");
+    sanitized =
+      (lastSpace > 240 ? truncated.substring(0, lastSpace) : truncated) + "...";
+  }
+
+  return sanitized.trim();
+}
+
+function sanitizeForFacebook(text: string): string {
+  // Facebook has a 63,206 character limit, but optimal is much shorter
+  let sanitized = text.trim();
+
+  // Remove any HTML tags
+  sanitized = sanitized.replace(/<[^>]*>/g, "");
+
+  // Remove potentially problematic characters but keep emojis and common symbols
+  sanitized = sanitized.replace(/[^\w\s#@.,!?;:()\-'"emoji\u00A0-\uFFFF]/g, "");
+
+  // Ensure hashtags work properly (Facebook is more flexible but clean them up)
+  sanitized = sanitized.replace(/#[\w\s]+/g, (match) => {
+    const cleaned = match.replace(/\s+/g, "");
+    return cleaned.length > 1 ? cleaned : "";
+  });
+
+  // Clean up mentions
+  sanitized = sanitized.replace(/@[\w\s]+/g, (match) => {
+    const cleaned = match.replace(/\s+/g, "");
+    return cleaned.length > 1 ? cleaned : "";
+  });
+
+  // Clean up excessive whitespace
+  sanitized = sanitized.replace(/\n{3,}/g, "\n\n");
+  sanitized = sanitized.replace(/\s{2,}/g, " ");
+
+  // Remove excessive punctuation
+  sanitized = sanitized.replace(/[.]{4,}/g, "...");
+  sanitized = sanitized.replace(/[!]{3,}/g, "!!");
+  sanitized = sanitized.replace(/[?]{3,}/g, "??");
+
+  // Keep it reasonable length for engagement (Facebook's sweet spot is 40-80 chars but allow longer)
+  if (sanitized.length > 1500) {
+    const truncated = sanitized.substring(0, 1497);
+    const lastSpace = truncated.lastIndexOf(" ");
+    sanitized =
+      (lastSpace > 1400 ? truncated.substring(0, lastSpace) : truncated) +
+      "...";
+  }
+
+  return sanitized.trim();
+}
+
+function validateContent(text: string): { isValid: boolean; reason?: string } {
+  const lowercaseText = text.toLowerCase();
+
+  // Check for potentially problematic content patterns
+  const problematicPatterns = [
+    /\b(spam|click here|buy now|act fast|limited time|urgent|free money)\b/gi,
+    /\b(hate|kill|die|stupid|idiot)\b/gi,
+    /(.)\1{10,}/g, // Excessive repetition
+    /[A-Z]{20,}/g, // Excessive caps
+  ];
+
+  for (const pattern of problematicPatterns) {
+    if (pattern.test(text)) {
+      return {
+        isValid: false,
+        reason:
+          "Content contains potentially inappropriate or spam-like language",
+      };
+    }
+  }
+
+  // Check for excessive special characters (potential spam)
+  const specialCharCount = (
+    text.match(/[!@#$%^&*()_+={}[\]|\\:";'<>?,./]/g) || []
+  ).length;
+  if (specialCharCount > text.length * 0.3) {
+    return {
+      isValid: false,
+      reason: "Content contains excessive special characters",
+    };
+  }
+
+  return { isValid: true };
+}
+
+function getPlatformSpecificGuidelines(platform: string): string {
+  if (platform === "twitter") {
+    return `
+Platform-specific guidelines for Twitter:
+- Keep it under 280 characters (aim for 240-260 for retweets)
+- Use 1-2 relevant hashtags maximum
+- Make it engaging and conversational
+- Include a call-to-action when appropriate
+- Use line breaks sparingly
+- Avoid excessive punctuation or special characters
+- Write in a concise, punchy style
+- Consider Twitter's audience: fast-paced, news-oriented, conversational
+- Use proper capitalization (not all caps)
+- Make it authentic and human-like`;
+  } else if (platform === "facebook") {
+    return `
+Platform-specific guidelines for Facebook:
+- Optimal length: 40-80 characters for high engagement, but can be longer for storytelling
+- Use storytelling and emotional connection
+- Ask questions to encourage engagement
+- Use emojis appropriately (1-3 per post)
+- Line breaks are okay for readability
+- Include relevant hashtags (3-5 maximum)
+- Write in a warm, community-focused tone
+- Consider Facebook's audience: community-focused, relationship-oriented
+- Use proper grammar and spelling
+- Make it authentic and personal`;
+  }
+  return "";
+}
+
 function detectGreeting(prompt: string): boolean {
   const normalized = prompt.toLowerCase().trim();
   const greetingPatterns = [
@@ -316,28 +466,36 @@ export async function generatePost(
       .join("\n");
 
     // --- 3. Generate post - use context/style if available, otherwise generate random post ---
-    let systemMessage =
-      "You are an expert at writing concise, professional social media posts.";
+    const platformGuidelines = getPlatformSpecificGuidelines(platform);
+    let systemMessage = `You are an expert at writing engaging, platform-optimized social media posts. ${platformGuidelines}
+    
+IMPORTANT: Follow these platform-specific rules strictly:
+- For Twitter: Maximum 280 characters, use 1-2 hashtags, be concise and punchy
+- For Facebook: Optimal 40-80 characters for high engagement, can be longer for storytelling, use 3-5 hashtags maximum
+- Always ensure the content is appropriate, professional, and engaging
+- Avoid inappropriate content, spam-like language, or excessive promotional tone
+- Use natural language that sounds authentic to the platform`;
+
     let userMessage = `User request:\n${prompt}\n\n`;
     let isRandomPost = false;
 
     if (relevantContext || relevantStyle) {
       // User has credentials and relevant data
       systemMessage +=
-        " Use the context to match the user's tone and style for the specified platform.";
+        " Use the provided context to match the user's tone and style while following platform guidelines.";
       userMessage +=
         (relevantContext
-          ? `Context from Slack messages:\n${relevantContext}\n\n`
+          ? `Context from user's Slack messages:\n${relevantContext}\n\n`
           : "") +
         (relevantStyle
-          ? `User's past posts for style:\n${relevantStyle}\n\n`
+          ? `User's past ${platform} posts for style reference:\n${relevantStyle}\n\n`
           : "") +
-        `Write the post in a style consistent with the past posts above for platform: ${platform}.`;
+        `Create a ${platform} post that matches the user's communication style from the examples above while following ${platform} best practices.`;
     } else {
       // User lacks credentials - generate random post with helpful message
       systemMessage +=
-        " Since no user data is available, create a generic but engaging post based on the request. Keep it professional and platform-appropriate.";
-      userMessage += `Create a generic but engaging ${platform} post about: ${prompt}. Make it professional and suitable for the platform.`;
+        " Since no user data is available, create a generic but engaging post following platform best practices.";
+      userMessage += `Create a professional and engaging ${platform} post about: "${prompt}". Follow ${platform} formatting guidelines and character limits.`;
       isRandomPost = true;
     }
 
@@ -356,10 +514,72 @@ export async function generatePost(
       max_tokens: 250,
     });
 
-    const post = completion.choices[0].message?.content ?? "";
+    const rawPost = completion.choices[0].message?.content ?? "";
+
+    // Validate content before processing
+    const validation = validateContent(rawPost);
+    if (!validation.isValid) {
+      console.warn("Generated content failed validation:", validation.reason);
+      // Regenerate with stricter guidelines if content is problematic
+      const sanitizedCompletion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              systemMessage +
+              "\n\nIMPORTANT: The content must be professional, appropriate, and free from spam-like language, excessive punctuation, or inappropriate content.",
+          },
+          {
+            role: "user",
+            content:
+              userMessage +
+              "\n\nPlease ensure the content is clean, professional, and appropriate for a business audience.",
+          },
+        ],
+        max_tokens: 250,
+      });
+      const cleanPost =
+        sanitizedCompletion.choices[0].message?.content ?? rawPost;
+
+      // Apply platform-specific sanitization
+      let sanitizedPost = cleanPost;
+      if (platform === "twitter") {
+        sanitizedPost = sanitizeForTwitter(cleanPost);
+      } else if (platform === "facebook") {
+        sanitizedPost = sanitizeForFacebook(cleanPost);
+      }
+
+      // If still failing validation after regeneration, use fallback
+      const finalValidation = validateContent(sanitizedPost);
+      if (!finalValidation.isValid) {
+        sanitizedPost = `Here's a curated post for your ${platform} audience. Configure your sources and platforms for better content generation.`;
+      }
+
+      const finalPost = isRandomPost
+        ? `${sanitizedPost}\n\n💡 Configure sources and platforms for curated posts`
+        : sanitizedPost;
+
+      return {
+        post: finalPost,
+        threadId: generateThreadId(),
+        platform: platform,
+        success: true,
+        isRandomPost,
+      };
+    }
+
+    // Apply platform-specific sanitization
+    let sanitizedPost = rawPost;
+    if (platform === "twitter") {
+      sanitizedPost = sanitizeForTwitter(rawPost);
+    } else if (platform === "facebook") {
+      sanitizedPost = sanitizeForFacebook(rawPost);
+    }
+
     const finalPost = isRandomPost
-      ? `${post}\n\n💡 Configure sources and platforms for curated posts`
-      : post;
+      ? `${sanitizedPost}\n\n💡 Configure sources and platforms for curated posts`
+      : sanitizedPost;
 
     return {
       post: finalPost,
@@ -522,6 +742,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Check if user has credentials for the detected platform
+    const userDoc = await db.collection("users").findOne({ _id: user._id });
+    const hasCredentials =
+      platformResult.platform === "twitter"
+        ? userDoc?.twitter
+        : userDoc?.facebook;
+
     return NextResponse.json({
       success: true,
       review: {
@@ -529,6 +756,7 @@ export async function POST(req: NextRequest) {
         threadId: result.threadId,
         platform: result.platform,
         userId,
+        hasCredentials: !!hasCredentials,
       },
     });
   } catch (err: any) {
@@ -602,9 +830,17 @@ export async function PUT(req: NextRequest) {
         : null,
     };
 
+    // Apply final sanitization before posting
+    let sanitizedPostContent = post;
+    if (platformResult.platform === "twitter") {
+      sanitizedPostContent = sanitizeForTwitter(post);
+    } else if (platformResult.platform === "facebook") {
+      sanitizedPostContent = sanitizeForFacebook(post);
+    }
+
     const authHeader = req.headers.get("authorization") ?? "";
     const postResult = await postApp.invoke({
-      post,
+      post: sanitizedPostContent,
       platform: platformResult.platform,
       threadId,
       userId,
@@ -612,11 +848,25 @@ export async function PUT(req: NextRequest) {
       authToken: authHeader,
     });
 
-    if (postResult.error) {
+    // Check for posting errors or failures
+    if (postResult.error || postResult.success === false) {
       return NextResponse.json(
         {
           success: false,
-          error: `I couldn't publish your post to ${platformResult.platform}. This could be due to platform API issues, credential problems, or connectivity issues. Please check your ${platformResult.platform} connection in settings and try again. 📱`,
+          error:
+            postResult.error ||
+            `I couldn't publish your post to ${platformResult.platform}. This could be due to platform API issues, credential problems, or connectivity issues. Please check your ${platformResult.platform} connection in settings and try again. 📱`,
+        },
+        { status: 500 }
+      );
+    }
+
+    // Check if posting was actually successful
+    if (!postResult.success && !postResult.posted) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `The post to ${platformResult.platform} may not have been published successfully. Please check your ${platformResult.platform} account to verify. 📝`,
         },
         { status: 500 }
       );
