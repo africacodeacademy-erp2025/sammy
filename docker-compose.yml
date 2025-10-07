@@ -1,11 +1,25 @@
+version: "3.9"
+
 services:
   sammy-app:
+    container_name: sammy-app-prod
     build:
       context: .
+      dockerfile: Dockerfile.prod
+      args:
+        NODE_ENV: production
+        MONGO_URI: ${MONGO_URI}
+        DATABASE_NAME: ${DATABASE_NAME}
+        JWT_SECRET: ${JWT_SECRET}
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
+        REDIS_URL: ${REDIS_URL}
+        JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+        ENC_SECRET: ${ENC_SECRET}
     env_file:
       - .env
     ports:
       - "3000:3000"
+    restart: unless-stopped
     networks:
       - sammy_network
 

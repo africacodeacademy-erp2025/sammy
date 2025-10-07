@@ -1,16 +1,18 @@
+version: "3.9"
+
 services:
   sammy-app:
-    container_name: sammy-app
+    container_name: sammy-app-dev
     build:
+      context: .
       dockerfile: Dockerfile.dev
-    # Enable hot reload with volume mounts for development
     volumes:
       - ./src:/app/src
       - ./lib:/app/lib
       - ./models:/app/models
       - ./workers:/app/workers
       - ./public:/app/public
-      - ./.env:/app/.env:ro                
+      - ./.env:/app/.env:ro
     ports:
       - "3000:3000"
     restart: always
@@ -19,4 +21,4 @@ services:
 
 networks:
   sammy_network:
-    name: sammy_production_network
+    name: sammy_dev_network
