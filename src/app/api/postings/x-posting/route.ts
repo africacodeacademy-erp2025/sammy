@@ -22,17 +22,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("Using Twitter credentials:", tokens.twitter);
+    console.log("Using Twitter OAuth 2.0 credentials");
 
-    const client = new TwitterApi({
-      appKey: tokens.twitter.appKey,
-      appSecret: tokens.twitter.appSecret,
-      accessToken: tokens.twitter.accessToken,
-      accessSecret: tokens.twitter.accessSecret,
-    });
+    // Use OAuth 2.0 access token
+    const client = new TwitterApi(tokens.twitter.accessToken);
 
-    const rwClient = client.readWrite;
-    const tweet = await rwClient.v2.tweet(post);
+    const tweet = await client.v2.tweet(post);
 
     return NextResponse.json({ success: true, tweet });
   } catch (error: any) {

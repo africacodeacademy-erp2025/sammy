@@ -5,6 +5,11 @@ import { encrypt, decrypt } from "../crypto";
 export type FacebookConfig = {
   pageId?: string;
   accessToken?: string;
+  pages?: Array<{
+    id: string;
+    name: string;
+    accessToken: string;
+  }>;
 };
 
 export async function saveFacebookConfig(
@@ -14,9 +19,13 @@ export async function saveFacebookConfig(
   const db = await connectDB();
   const users = db.collection("users");
 
-  const encryptedConfig: FacebookConfig = {
+  const encryptedConfig: any = {
     ...config,
     accessToken: config.accessToken ? encrypt(config.accessToken) : undefined,
+    pages: config.pages?.map((page) => ({
+      ...page,
+      accessToken: encrypt(page.accessToken),
+    })),
   };
 
   await users.updateOne(
@@ -43,5 +52,9 @@ export async function getFacebookConfig(
   return {
     ...config,
     accessToken: config.accessToken ? decrypt(config.accessToken) : undefined,
+    pages: config.pages?.map((page) => ({
+      ...page,
+      accessToken: decrypt(page.accessToken),
+    })),
   };
 }
