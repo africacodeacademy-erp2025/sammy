@@ -7,8 +7,18 @@ import { getUserFromRequest } from "../../../../../../lib/auth";
  */
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    const user = await getUserFromRequest(authHeader);
+    // Get auth token from query parameter
+    const { searchParams } = new URL(req.url);
+    const token = searchParams.get("token");
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Authentication token required" },
+        { status: 401 }
+      );
+    }
+
+    const user = await getUserFromRequest(`Bearer ${token}`);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -31,11 +41,12 @@ export async function GET(req: NextRequest) {
       "pages_show_list",
     ];
 
-    // Generate state parameter with userId for security
+    // Generate state parameter with userId and auth token for security
     const state = Buffer.from(
       JSON.stringify({
         userId: user._id.toString(),
         timestamp: Date.now(),
+        token, // Store auth token for callback
       })
     ).toString("base64");
 
@@ -46,7 +57,8 @@ export async function GET(req: NextRequest) {
     authUrl.searchParams.set("state", state);
     authUrl.searchParams.set("response_type", "code");
 
-    return NextResponse.json({ authUrl: authUrl.toString() });
+    // Redirect directly to Facebook OAuth instead of returning JSON
+    return NextResponse.redirect(authUrl.toString());
   } catch (error) {
     console.error("Error initiating Facebook OAuth:", error);
     return NextResponse.json(
