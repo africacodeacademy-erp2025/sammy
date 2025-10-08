@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "../../../../../../lib/mongo";
 import OpenAI from "openai";
-import { decrypt } from "../../../../../../lib/crypto";
-import { WebClient } from "@slack/web-api";
+import { getSlackUserClient } from "../../../../../../lib/integrations/slack";
 
-const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
+const openai = process.env.OPEN_AI_API
+  ? new OpenAI({ apiKey: process.env.OPEN_AI_API })
+  : null;
 
 export async function POST(req: Request) {
   let body: any;
@@ -41,24 +42,29 @@ export async function POST(req: Request) {
       try {
         const db = await connectDB();
 
-        // Find user by workspaceId
+        // Find user by teamId (OAuth only)
         const user = await db.collection("users").findOne({
-          "slack.workspaceId": body.team_id,
+          "slack.teamId": body.team_id,
         });
 
         if (!user) return NextResponse.json({ ok: true });
 
-        // Convert channel ID → name using user token
-        const slack = new WebClient(decrypt(user.slack.userToken));
+        // Get Slack bot client (OAuth accessToken)
+        const { getSlackBotClient } = await import(
+          "../../../../../../lib/integrations/slack"
+        );
+        const slack = await getSlackBotClient(user._id.toString());
+        if (!slack) return NextResponse.json({ ok: true });
+
+        // Convert channel ID → name using bot/user token
         const channelInfo = await slack.conversations.info({
           channel: event.channel,
         });
         const channelName = channelInfo.channel?.name;
         if (!channelName) return NextResponse.json({ ok: true });
 
-        // Skip channels not tracked
-        if (!user.slack.channels.includes(channelName))
-          return NextResponse.json({ ok: true });
+        // OAuth: Process all messages from channels where bot is a member
+        // No channel filtering needed - bot only receives events from channels it's in
 
         const collection = db.collection("messages");
 
@@ -69,18 +75,29 @@ export async function POST(req: Request) {
         });
         if (existing) return NextResponse.json({ ok: true });
 
-        // Generate embedding
-        const embeddingResp = await openai.embeddings.create({
-          model: "text-embedding-3-small",
-          input: event.text,
-        });
+        // Generate embedding (if OpenAI is available)
+        let embedding: number[] = [];
+        if (openai) {
+          try {
+            const embeddingResp = await openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: event.text,
+            });
+            embedding = embeddingResp.data[0].embedding;
+          } catch (error) {
+            console.error(
+              "Failed to generate embedding for Slack message:",
+              error
+            );
+          }
+        }
 
         const doc = {
           channel: channelName,
           user: event.user,
           text: event.text,
           ts: event.ts,
-          embedding: embeddingResp.data[0].embedding,
+          embedding,
           userId: user._id.toString(),
         };
 

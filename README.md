@@ -151,17 +151,29 @@ For issues, questions, or contributions:
 ✅ "Post to Facebook on Oct 15 at 10:30 UTC"
 ```atures
 
-- 🔐 **One-Click OAuth 2.0** - Connect Twitter and Facebook accounts with secure OAuth flows (no manual API keys!)
+- 🔐 **One-Click OAuth 2.0** - Connect Twitter, Facebook, and Slack accounts with secure OAuth flows (no manual API keys!)
 - 🤖 **AI Content Generation** - OpenAI-powered post creation with context-aware drafting
-- 📊 **Automatic Context Learning** - Pulls and analyzes your past posts to match your writing style
+- 📊 **Automatic Context Learning** - Pulls and analyzes your past posts and Slack messages to match your writing style
 - 🎯 **Vector-Based Intelligence** - Uses MongoDB vector search with embeddings for semantic post analysis
 - ⏰ **Smart Scheduling** - Natural language schedule extraction ("tomorrow at 9am") with background workers
 - ✅ **Review & Approve Workflow** - Preview generated posts before publishing
 - 🔒 **Enterprise Security** - AES-256-GCM encryption for all credentials and tokens
 - 🚀 **Multi-Platform** - Simultaneous posting to Twitter/X and Facebook
-- 📱 **Modern Stack** - Next.js 15, React 19, TypeScript, Tailwind CSS
+- � **Slack Integration** - Automatic message ingestion for context learning with real-time webhook support
+- �📱 **Modern Stack** - Next.js 15, React 19, TypeScript, Tailwind CSS
 
 ## 🚀 Quick Start
+
+### 🔐 OAuth 2.0 Security Model
+
+SaMMy uses **OAuth 2.0 exclusively** for all platform integrations:
+
+- **Twitter/X**: OAuth 2.0 with PKCE (no API keys needed)
+- **Facebook**: OAuth 2.0 with proper scopes
+- **Slack**: OAuth 2.0 with workspace-level permissions
+- **No Manual Tokens**: All credentials obtained through secure OAuth flows
+- **Encrypted Storage**: All tokens encrypted with AES-256-GCM before database storage
+- **Auto-Refresh**: Refresh tokens handled automatically (Twitter)
 
 ### 1. Clone and Install
 
@@ -196,6 +208,23 @@ cp .env.example .env
 4. Add redirect URI: `http://localhost:3000/api/integrations/facebook/callback`
 5. Copy App ID and App Secret to `.env`
 
+**Slack (Optional - for context ingestion):**
+
+1. Go to [Slack API](https://api.slack.com/apps/)
+2. Create a new app or select existing app
+3. Enable OAuth 2.0 with required scopes:
+   - `channels:history` - Read public channel messages
+   - `channels:read` - List public channels
+   - `groups:history` - Read private channel messages
+   - `groups:read` - List private channels
+   - `users:read` - Read user information
+   - `chat:write` - Send messages
+4. Add redirect URI: `http://localhost:3000/api/integrations/slack/callback`
+5. Copy Client ID and Client Secret to `.env`
+6. Configure Event Subscriptions (optional for real-time ingestion):
+   - Request URL: `https://your-domain.com/api/sources/slack/events`
+   - Subscribe to `message.channels` and `message.groups` events
+
 ### 4. Start Development
 
 ```bash
@@ -215,8 +244,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ### User Flow
 
 1. **Sign Up / Login** - Create account with email/password (JWT authentication)
-2. **Connect Platforms** - One-click OAuth for Twitter and Facebook
-3. **Automatic Learning** - System automatically pulls your recent posts (10 tweets, 5 Facebook posts)
+2. **Connect Platforms** - One-click OAuth for Twitter, Facebook, and Slack
+3. **Automatic Learning** - System automatically pulls your recent posts (10 tweets, 5 Facebook posts) and Slack messages from connected channels
 4. **Generate Content** - Chat with AI to create posts: "Create a Twitter post about AI trends"
 5. **Review & Approve** - Preview generated content before publishing
 6. **Schedule or Post** - Post immediately or schedule for later
@@ -234,9 +263,17 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 - Twitter: Fetches 10 most recent tweets on OAuth connection
 - Facebook: Fetches 5 most recent posts on OAuth connection
+- Slack: Fetches recent messages from channels where bot is a member (3 messages per channel)
 - Runs in background without blocking user experience
 - Generates embeddings for semantic search
 - Deduplicates automatically to prevent data redundancy
+
+**Real-time Slack Integration:**
+
+- Automatic webhook-based message ingestion from connected Slack workspaces
+- Processes messages from all channels where the bot is a member
+- Generates embeddings for new messages to enhance context learning
+- OAuth 2.0 security with encrypted token storage
 
 ## 🛠️ Technology Stack
 
@@ -248,9 +285,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | **Database**         | MongoDB Atlas with Vector Search (`vector_index` for embeddings)            |
 | **Authentication**   | JWT tokens, bcrypt password hashing                                         |
 | **Security**         | AES-256-GCM encryption for OAuth tokens and credentials                     |
-| **OAuth 2.0**        | Twitter API v2 (with PKCE), Facebook Graph API v21.0                        |
+| **OAuth 2.0**        | Twitter API v2 (with PKCE), Facebook Graph API v21.0, Slack Web API         |
 | **Background Jobs**  | BullMQ + Redis (scheduled post processing)                                  |
-| **API Integrations** | Twitter API v2, Facebook Graph API, Slack Web API                           |
+| **API Integrations** | Twitter API v2, Facebook Graph API, Slack Web API (OAuth 2.0)               |
 | **Testing**          | Jest, @testing-library/react                                                |
 | **Dev Tools**        | Turbopack, ESLint, TypeScript strict mode                                   |
 
@@ -271,9 +308,9 @@ AES-256-GCM Encrypted Credential Storage
 ### OAuth 2.0 Connection Flow
 
 ```
-User clicks "Connect X Account" / "Connect Facebook"
+User clicks "Connect X Account" / "Connect Facebook" / "Connect Slack"
     ↓
-Redirect to OAuth Provider (Twitter/Facebook)
+Redirect to OAuth Provider (Twitter/Facebook/Slack)
     ↓
 User Authorizes Application
     ↓
@@ -283,11 +320,11 @@ Exchange Code for Access Token (+ Refresh Token for Twitter)
     ↓
 Encrypt & Store Tokens in MongoDB
     ↓
-[AUTOMATIC] Pull Past Posts in Background
+[AUTOMATIC] Pull Past Posts/Messages in Background
     ↓
 Generate Embeddings with OpenAI
     ↓
-Save to past_posts Collection
+Save to past_posts Collection (Twitter/Facebook) or messages Collection (Slack)
     ↓
 User Redirected to App (Connection Complete)
 ```
@@ -360,7 +397,8 @@ extractScheduleTime → [if scheduled] → END
 | GET | `/api/integrations/facebook/oauth` | Initiate Facebook OAuth flow |
 | GET | `/api/integrations/facebook/callback` | Facebook OAuth callback (exchanges code for tokens) |
 | POST | `/api/integrations/facebook/connect` | Manually store Facebook credentials (legacy) |
-| POST | `/api/integrations/slack/connect` | Store Slack credentials |
+| GET | `/api/integrations/slack/oauth` | Initiate Slack OAuth 2.0 flow |
+| GET | `/api/integrations/slack/callback` | Slack OAuth callback (exchanges code for tokens) |
 
 ### Content Generation & Posting
 | Method | Endpoint | Description |
@@ -397,7 +435,8 @@ extractScheduleTime → [if scheduled] → END
 | GET    | `/api/integrations/facebook/oauth`    | Initiate Facebook OAuth flow                                |
 | GET    | `/api/integrations/facebook/callback` | Facebook OAuth callback                                     |
 | POST   | `/api/integrations/facebook/connect`  | Store Facebook creds (encrypted)                            |
-| POST   | `/api/integrations/slack/connect`     | Store Slack creds (encrypted)                               |
+| GET    | `/api/integrations/slack/oauth`       | Initiate Slack OAuth 2.0 flow                               |
+| GET    | `/api/integrations/slack/callback`    | Slack OAuth callback (OAuth 2.0 only)                       |
 | GET    | `/api/scheduledposts`                 | List scheduled posts (basic/placeholder)                    |
 | POST   | `/api/sources/slack`                  | Ingest Slack messages for embeddings (user-scoped)          |
 | POST   | `/api/sources/slack/events`           | Slack Events endpoint (ingestion)                           |
@@ -501,10 +540,11 @@ FACEBOOK_APP_SECRET=your_facebook_app_secret
 FACEBOOK_REDIRECT_URI=http://localhost:3000/api/integrations/facebook/callback
 
 # ============================================
-# Slack (Optional - for context ingestion)
+# Slack OAuth 2.0 (Optional - for context ingestion)
 # ============================================
-SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_USER_TOKEN=xoxp-your-user-token
+SLACK_CLIENT_ID=your_slack_oauth2_client_id
+SLACK_CLIENT_SECRET=your_slack_oauth2_client_secret
+SLACK_REDIRECT_URI=http://localhost:3000/api/integrations/slack/callback
 ```
 
 ### Environment Variable Notes
@@ -536,10 +576,12 @@ SLACK_USER_TOKEN=xoxp-your-user-token
   ]
   },
   slack?: {
-  workspaceId?: string,
-  botToken?: string, // Encrypted
-  userToken?: string, // Encrypted
-  channels?: string
+  // OAuth 2.0 fields
+  accessToken?: string, // Bot token (encrypted)
+  userAccessToken?: string, // User token (encrypted)
+  teamId?: string, // Workspace/Team ID
+  teamName?: string, // Workspace name
+  userId?: string // Slack user ID
   },
   createdAt: Date,
   updatedAt: Date
@@ -557,6 +599,23 @@ SLACK_USER_TOKEN=xoxp-your-user-token
   embedding: number[],            // 1536-dim vector (OpenAI text-embedding-3-small)
   platform: "twitter" | "facebook",
   createdAt: Date
+}
+```
+
+#### `messages` (Slack)
+```typescript
+{
+  _id: ObjectId,
+  userId: string,
+  channel: string,                // Slack channel name
+  user: string,                   // Slack user ID
+  text: string,                   // Message content
+  ts: string,                     // Slack timestamp
+  embedding: number[],            // 1536-dim vector (OpenAI text-embedding-3-small)
+  createdAt: Date
+}
+```
+
 ## 📝 API Usage Examples
 
 ### 1. User Registration
@@ -677,9 +736,21 @@ Access the application at [http://localhost:3000](http://localhost:3000)
 3. Add your IP to the whitelist
 4. Create a database user
 5. Get your connection string
-6. **Create Vector Search Index:**
+6. **Create Vector Search Indexes:**
+
+   **For past_posts collection:**
+
    - Database: `sammy`
    - Collection: `past_posts`
+   - Index Name: `vector_index`
+   - Field: `embedding`
+   - Dimensions: 1536
+   - Similarity: cosine
+
+   **For messages collection (Slack):**
+
+   - Database: `sammy`
+   - Collection: `messages`
    - Index Name: `vector_index`
    - Field: `embedding`
    - Dimensions: 1536
@@ -741,6 +812,10 @@ curl -X GET "http://localhost:3000/api/pulling/x-pulling?count=10" \
 
 # Pull recent Facebook posts (automatically pulls 5)
 curl -X GET "http://localhost:3000/api/pulling/fb-pulling?count=5" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Fetch Slack messages for context (from connected channels)
+curl -X GET "http://localhost:3000/api/sources/slack" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 

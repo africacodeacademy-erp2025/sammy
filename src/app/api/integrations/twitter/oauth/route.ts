@@ -8,8 +8,19 @@ import crypto from "crypto";
  */
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    const user = await getUserFromRequest(authHeader);
+    // Get auth token from query parameter
+    const { searchParams } = new URL(req.url);
+    const token = searchParams.get("token");
+
+    if (!token) {
+      console.error("Twitter OAuth: Authentication token required");
+      return NextResponse.json(
+        { error: "Authentication token required" },
+        { status: 401 }
+      );
+    }
+
+    const user = await getUserFromRequest(`Bearer ${token}`);
     if (!user) {
       console.error("Twitter OAuth: User not authenticated");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -52,12 +63,13 @@ export async function GET(req: NextRequest) {
       "offline.access", // For refresh token
     ];
 
-    // Generate state parameter with userId and code verifier for security
+    // Generate state parameter with userId, code verifier, and auth token for security
     const state = Buffer.from(
       JSON.stringify({
         userId: user._id.toString(),
         timestamp: Date.now(),
         codeVerifier, // Store for callback
+        token, // Store auth token for callback
       })
     ).toString("base64");
 
@@ -76,7 +88,8 @@ export async function GET(req: NextRequest) {
       scopes: scopes.join(" "),
     });
 
-    return NextResponse.json({ authUrl: authUrl.toString() });
+    // Redirect directly to Twitter OAuth instead of returning JSON
+    return NextResponse.redirect(authUrl.toString());
   } catch (error) {
     console.error("Error initiating Twitter OAuth:", error);
     return NextResponse.json(

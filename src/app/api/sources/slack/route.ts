@@ -4,7 +4,7 @@ import { WebClient } from "@slack/web-api";
 import { connectDB } from "../../../../../lib/mongo";
 import OpenAI from "openai";
 import { getUserFromRequest } from "../../../../../lib/auth";
-import { decrypt } from "../../../../../lib/crypto";
+import { getSlackUserClient } from "../../../../../lib/integrations/slack";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
@@ -22,23 +22,44 @@ export async function GET(req: Request) {
     const user = await getUserFromRequest(req.headers.get("authorization"));
 
     console.log(user);
-    if (!user || !user.slack?.userToken || !user.slack.channels) {
+    if (!user || !user.slack) {
       return NextResponse.json(
         { success: false, error: "Unauthorized or no Slack credentials" },
         { status: 401 }
       );
     }
 
-    // Ensure channels is always an array of strings
-    const channels: string[] = Array.isArray(user.slack.channels)
-      ? user.slack.channels
-      : (user.slack.channels || "")
-          .split(",")
-          .map((c: string) => c.trim())
-          .filter(Boolean);
+    // Get Slack client using OAuth tokens (prioritized) or legacy tokens
+    const slack = await getSlackUserClient(user._id.toString());
 
-    const slackUserToken = decrypt(user.slack.userToken);
-    const slack = new WebClient(slackUserToken);
+    if (!slack) {
+      return NextResponse.json(
+        { success: false, error: "No valid Slack credentials found" },
+        { status: 401 }
+      );
+    }
+
+    // Get channels - if not specified, fetch user's channels
+    let channels: string[] = [];
+    if (user.slack.channels) {
+      channels = Array.isArray(user.slack.channels)
+        ? user.slack.channels
+        : (user.slack.channels || "")
+            .split(",")
+            .map((c: string) => c.trim())
+            .filter(Boolean);
+    } else {
+      // Fetch user's channels if not specified
+      const list = await slack.conversations.list({
+        types: "public_channel,private_channel",
+        exclude_archived: true,
+        limit: 20,
+      });
+      channels = (list.channels || [])
+        .filter((c: any) => c.is_member)
+        .map((c: any) => c.name as string)
+        .slice(0, 5); // Limit to 5 channels
+    }
 
     const db = await connectDB();
     const collection = db.collection<MessageDoc>("messages");

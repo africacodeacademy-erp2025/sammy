@@ -833,8 +833,8 @@ export async function PUT(req: NextRequest) {
             accessToken: decrypt(userDoc.facebook.accessToken),
           }
         : null,
-      slack: userDoc?.slack?.userToken
-        ? decrypt(userDoc.slack.userToken)
+      slack: userDoc?.slack?.userAccessToken
+        ? decrypt(userDoc.slack.userAccessToken)
         : null,
     };
 
