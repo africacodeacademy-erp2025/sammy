@@ -90,8 +90,8 @@ export default function Sidebar({
 
           <SidebarButton
             onClick={onManageCredentials}
-            title="Manage Credentials"
-            description="Configure API keys & tokens"
+            title="Sources & Platform"
+            description="Connect sources and platform"
             icon={<span className="text-green-400">🔑</span>}
           />
 

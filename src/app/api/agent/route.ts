@@ -25,7 +25,15 @@ export interface GraphState {
   success?: boolean;
   error?: string;
   userId?: string;
-  tokens?: { twitter?: string; facebook?: string };
+  tokens?: {
+    twitter?: {
+      accessToken: string;
+    };
+    facebook?: {
+      pageId: string;
+      accessToken: string;
+    };
+  };
   authToken?: string;
   isRandomPost?: boolean;
   isGreeting?: boolean;
@@ -640,6 +648,9 @@ const postWorkflow = new StateGraph<GraphState>({
     tokens: null,
     userId: null,
     authToken: null,
+    success: null,
+    error: null,
+    result: null,
   },
 });
 postWorkflow.addNode("twitterPosting", twitterPosting as any);
@@ -811,12 +822,9 @@ export async function PUT(req: NextRequest) {
     }
 
     const tokens = {
-      twitter: userDoc?.twitter
+      twitter: userDoc?.twitter?.accessToken
         ? {
-            appKey: userDoc.twitter.appKey,
-            appSecret: userDoc.twitter.appSecret,
             accessToken: decrypt(userDoc.twitter.accessToken),
-            accessSecret: decrypt(userDoc.twitter.accessSecret),
           }
         : null,
       facebook: userDoc?.facebook

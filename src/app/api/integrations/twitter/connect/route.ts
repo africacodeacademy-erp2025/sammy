@@ -5,6 +5,10 @@ import {
   getTwitterConfig,
 } from "../../../../../../lib/integrations/twitter";
 
+/**
+ * POST: Save Twitter OAuth 2.0 credentials
+ * GET: Retrieve Twitter credentials
+ */
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -13,17 +17,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { appKey, appSecret, accessToken, accessSecret } = body;
 
-    if (!appKey || !appSecret || !accessToken || !accessSecret) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    // Only accept OAuth 2.0 tokens
+    if (!body.accessToken || !body.refreshToken) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing OAuth tokens. Please use the OAuth flow to connect your account.",
+        },
+        { status: 400 }
+      );
     }
 
     await saveTwitterConfig(user._id.toString(), {
-      appKey,
-      appSecret,
-      accessToken,
-      accessSecret,
+      accessToken: body.accessToken,
+      refreshToken: body.refreshToken,
+      expiresAt: body.expiresAt,
     });
 
     return NextResponse.json({ message: "Twitter config saved successfully" });

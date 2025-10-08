@@ -59,12 +59,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await getUserFromRequest(req.headers.get("authorization"));
 
-    if (
-      !user?.twitter?.appKey ||
-      !user.twitter?.appSecret ||
-      !user.twitter?.accessToken ||
-      !user.twitter?.accessSecret
-    ) {
+    if (!user?.twitter?.accessToken) {
       return NextResponse.json(
         { error: "Twitter not configured" },
         { status: 400 }
@@ -78,13 +73,9 @@ export async function GET(req: NextRequest) {
     if (count < 10) count = 10;
     if (count > 100) count = 100;
 
-    // init twitter client
-    const client = new TwitterApi({
-      appKey: user.twitter.appKey,
-      appSecret: user.twitter.appSecret,
-      accessToken: decrypt(user.twitter.accessToken),
-      accessSecret: decrypt(user.twitter.accessSecret),
-    });
+    // Decrypt access token and init OAuth 2.0 client
+    const accessToken = decrypt(user.twitter.accessToken);
+    const client = new TwitterApi(accessToken);
 
     // get current user via v2
     const { data: me } = await client.v2.me();

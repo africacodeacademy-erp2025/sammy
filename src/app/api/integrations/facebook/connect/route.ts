@@ -5,6 +5,10 @@ import {
   getFacebookConfig,
 } from "../../../../../../lib/integrations/facebook";
 
+/**
+ * POST: Save Facebook OAuth credentials
+ * GET: Retrieve Facebook credentials
+ */
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -13,13 +17,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { pageId, accessToken } = body;
+    const { accessToken, pages } = body;
 
-    if (!pageId || !accessToken) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    // Require OAuth flow data
+    if (!accessToken) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing access token. Please use the OAuth flow to connect your account.",
+        },
+        { status: 400 }
+      );
     }
 
-    await saveFacebookConfig(user._id.toString(), { pageId, accessToken });
+    await saveFacebookConfig(user._id.toString(), {
+      pageId: pages && pages.length > 0 ? pages[0].id : "",
+      accessToken,
+      pages,
+    });
 
     return NextResponse.json({ message: "Facebook config saved successfully" });
   } catch (error) {
