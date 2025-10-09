@@ -1,6 +1,7 @@
 "use client";
 import { MessageBubbleProps } from "../Types";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 
 export default function MessageBubble({
   message,
@@ -8,11 +9,13 @@ export default function MessageBubble({
   onReject,
   isLatestAiMessage,
   onEditSave,
+  onAttachmentsChange,
 }: MessageBubbleProps) {
   const isUser = message.sender === "user";
   const [isVisible, setIsVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isLatestAiMessage) {
@@ -46,10 +49,24 @@ export default function MessageBubble({
     }
   };
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && onAttachmentsChange) {
+      onAttachmentsChange(message.id, Array.from(event.target.files));
+    }
+  };
+
+  const handleAttachClick = () => {
+    // Temporarily disabled due to Twitter API limitations
+    alert(
+      "📷 Image attachments are temporarily under maintenance due to API limitations. This feature will be restored soon!"
+    );
+    // fileInputRef.current?.click(); // Uncomment when ready to re-enable
+  };
+
   const statusLabels: Record<string, React.ReactNode> = {
     pending: (
-      <div className="flex flex-col gap-2 mt-3 p-3 bg-black/20 rounded-lg border border-white/10">
-        <span className="text-xs font-medium text-white/80">
+      <div className="flex flex-col gap-3 mt-3 p-3 bg-black/20 rounded-lg border border-white/10">
+        <span className="text-sm font-medium text-white/80">
           📝 Ready for review
         </span>
 
@@ -63,14 +80,14 @@ export default function MessageBubble({
             />
             <div className="flex gap-2 justify-end">
               <button
-                className="text-xs p-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                className="p-2 rounded-lg bg-transparent border border-gray-500 text-white hover:bg-gray-500/20 transition-colors text-lg"
                 onClick={handleCancelEdit}
                 title="Cancel"
               >
                 ❌
               </button>
               <button
-                className="text-xs p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="p-2 rounded-lg bg-transparent border border-green-500 text-white hover:bg-green-500/20 transition-colors text-lg"
                 onClick={handleSaveEdit}
                 title="Save"
               >
@@ -79,28 +96,47 @@ export default function MessageBubble({
             </div>
           </div>
         ) : (
-          <div className="flex gap-1">
-            <button
-              className="text-xs p-2 rounded-lg bg-sky-600 text-white hover:bg-sky-700 transition-colors"
-              onClick={() => setIsEditing(true)}
-              title="Edit post"
-            >
-              ✏️
-            </button>
-            <button
-              className="text-xs p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-              onClick={handleApprove}
-              title="Approve"
-            >
-              ✅
-            </button>
-            <button
-              className="text-xs p-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors"
-              onClick={() => onReject(message.id)}
-              title="Reject"
-            >
-              ❌
-            </button>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-2">
+              <button
+                className="p-2 rounded-lg bg-transparent border border-sky-500 text-white hover:bg-sky-500/20 transition-colors text-lg"
+                onClick={() => setIsEditing(true)}
+                title="Edit post"
+              >
+                ✏️
+              </button>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                className="p-2 rounded-lg bg-transparent border border-blue-500 text-white hover:bg-blue-500/20 transition-colors text-lg"
+                onClick={handleAttachClick}
+                title="Attach images"
+              >
+                ➕
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="p-2 rounded-lg bg-transparent border border-green-500 text-white hover:bg-green-500/20 transition-colors text-lg"
+                onClick={handleApprove}
+                title="Approve"
+              >
+                ✅
+              </button>
+              <button
+                className="p-2 rounded-lg bg-transparent border border-rose-500 text-white hover:bg-rose-500/20 transition-colors text-lg"
+                onClick={() => onReject(message.id)}
+                title="Reject"
+              >
+                ❌
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -154,9 +190,23 @@ export default function MessageBubble({
             : "bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50"
         }`}
       >
-        <div className="whitespace-pre-wrap break-words">
-          {editedContent}
-        </div>
+        <div className="whitespace-pre-wrap break-words">{editedContent}</div>
+
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {message.attachments.map((file, index) => (
+              <div key={index} className="relative w-16 h-16">
+                <Image
+                  src={URL.createObjectURL(file)}
+                  alt={`attachment ${index + 1}`}
+                  fill
+                  style={{ objectFit: "cover" }}
+                  className="rounded-md"
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex justify-between items-center mt-2">
           <div className="text-xs opacity-70">

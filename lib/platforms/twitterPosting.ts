@@ -2,17 +2,75 @@ import { GraphState } from "../../src/app/api/agent/route";
 import { handleExpiredToken } from "../auth";
 import { connectDB } from "../mongo";
 import { ObjectId } from "mongodb";
+import { TwitterApi } from "twitter-api-v2";
+import { decrypt, encrypt } from "../crypto";
 
 const TWITTER_POSTING_ENDPOINT = "/api/postings/x-posting";
 
-interface TwitterPostRequest {
-  post: string;
-  platform: string;
-  tokens: {
-    twitter: {
-      accessToken: string;
-    };
-  };
+export async function refreshTwitterToken(
+  userId: string
+): Promise<string | null> {
+  const db = await connectDB();
+  const user = await db
+    .collection("users")
+    .findOne({ _id: new ObjectId(userId) });
+
+  if (!user || !user.twitter || !user.twitter.refreshToken) {
+    console.error("No refresh token found for user:", userId);
+    return null;
+  }
+
+  const refreshToken = decrypt(user.twitter.refreshToken);
+
+  try {
+    const client = new TwitterApi({
+      clientId: process.env.TWITTER_CLIENT_ID!,
+      clientSecret: process.env.TWITTER_CLIENT_SECRET!,
+    });
+
+    const {
+      client: refreshedClient,
+      accessToken,
+      refreshToken: newRefreshToken,
+    } = await client.refreshOAuth2Token(refreshToken);
+
+    // Encrypt and save the new tokens
+    await db.collection("users").updateOne(
+      { _id: new ObjectId(userId) },
+      {
+        $set: {
+          "twitter.accessToken": encrypt(accessToken),
+          "twitter.refreshToken": newRefreshToken
+            ? encrypt(newRefreshToken)
+            : user.twitter.refreshToken, // Keep old one if not provided
+          "twitter.expiresAt": new Date(Date.now() + 7200 * 1000), // 2 hours from now
+        },
+      }
+    );
+
+    console.log("Successfully refreshed Twitter token for user:", userId);
+    return accessToken;
+  } catch (error) {
+    console.error("Error refreshing Twitter token:", error);
+    // Optionally, handle token revocation or other specific errors
+    if ((error as any).data?.error === "invalid_grant") {
+      // The refresh token is invalid or revoked, clear it
+      await db.collection("users").updateOne(
+        { _id: new ObjectId(userId) },
+        {
+          $unset: {
+            "twitter.accessToken": "",
+            "twitter.refreshToken": "",
+            "twitter.expiresAt": "",
+          },
+        }
+      );
+      console.error(
+        "Twitter refresh token was invalid. User needs to re-authenticate."
+      );
+    }
+    return null;
+  }
 }
 
 export async function twitterPosting(
@@ -22,12 +80,60 @@ export async function twitterPosting(
     const validationError = validateTwitterPostState(state);
     if (validationError) return validationError;
 
-    const { post, authToken, tokens } = state;
+    const { post, authToken, tokens, attachments } = state;
 
     logTwitterPostAttempt(state);
 
-    const requestBody = createTwitterPostRequest(post!, tokens!);
-    const response = await sendTwitterPostRequest(requestBody, authToken!);
+    console.log("=== TwitterPosting Debug ===");
+    console.log("Attachments in state:", attachments?.length || 0);
+    if (attachments) {
+      attachments.forEach((file, index) => {
+        console.log(
+          `TwitterPosting attachment ${index}: ${file.name}, size: ${file.size}, type: ${file.type}`
+        );
+      });
+    }
+
+    const formData = new FormData();
+    formData.append("post", post!);
+    formData.append("platform", "twitter");
+    formData.append(
+      "tokens",
+      JSON.stringify({
+        twitter: {
+          accessToken: tokens!.twitter!.accessToken,
+        },
+      })
+    );
+
+    if (attachments) {
+      attachments.forEach((file, index) => {
+        console.log(`Adding attachment ${index} to FormData: ${file.name}`);
+        formData.append("attachments", file);
+      });
+    }
+
+    console.log("FormData entries being sent:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(
+          `${key}: File(${value.name}, ${value.size} bytes, ${value.type})`
+        );
+      } else {
+        console.log(`${key}: ${value}`);
+      }
+    }
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_URL}${TWITTER_POSTING_ENDPOINT}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: authToken!,
+        },
+        body: formData,
+      }
+    );
 
     if (!response.ok) {
       return handleTwitterPostError(response, state);
@@ -73,154 +179,29 @@ function logTwitterPostAttempt(state: GraphState): void {
   });
 }
 
-function createTwitterPostRequest(
-  post: string,
-  tokens: GraphState["tokens"]
-): TwitterPostRequest {
-  return {
-    post,
-    platform: "twitter",
-    tokens: {
-      twitter: {
-        accessToken: tokens!.twitter!.accessToken,
-      },
-    },
-  };
-}
-
-async function sendTwitterPostRequest(
-  requestBody: TwitterPostRequest,
-  authToken: string
-): Promise<Response> {
-  return fetch(
-    `${process.env.NEXT_PUBLIC_BASE_URL}${TWITTER_POSTING_ENDPOINT}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `${authToken}`,
-      },
-      body: JSON.stringify(requestBody),
-    }
-  );
-}
-
 async function handleTwitterPostError(
   response: Response,
   state: GraphState
 ): Promise<Partial<GraphState>> {
-  const bodyText = await response.text();
-  console.error("Twitter API failed:", bodyText);
+  const { userId } = state;
+  const errorData = await response.json();
+  console.error("Twitter API error:", errorData);
 
-  // Check for expired token
-  const tokenError = handleExpiredToken({ code: response.status }, "twitter");
-
-  if (tokenError.expired) {
-    console.log("Attempting to refresh Twitter token...");
-    const newAccessToken = await refreshTwitterToken(state.userId!);
-
-    if (newAccessToken) {
-      console.log("Token refreshed successfully. Retrying request...");
-      state.tokens!.twitter!.accessToken = newAccessToken;
-      return twitterPosting(state); // Retry the request
+  if (response.status === 401 && userId) {
+    const expiredTokenHandled = await handleExpiredToken(userId, "twitter");
+    if (expiredTokenHandled) {
+      return {
+        success: false,
+        error:
+          "Your Twitter/X session expired, but we've refreshed it. Please try posting again! ✨",
+      };
     }
-
-    return {
-      success: false,
-      error: "Token expired and could not be refreshed. Please reauthenticate.",
-    };
   }
 
   return {
     success: false,
-    error: `Could not post to Twitter/X. ${response.status} error.`,
+    error:
+      errorData.error ||
+      "Failed to post to Twitter/X. Please check your credentials and try again.",
   };
-}
-
-/**
- * Refreshes the Twitter access token using the stored refresh token.
- * Updates the user object in the database with the new tokens.
- */
-export async function refreshTwitterToken(
-  userId: string
-): Promise<string | null> {
-  try {
-    const db = await connectDB();
-    const users = db.collection("users");
-
-    // Fetch the user's refresh token
-    const user = await users.findOne({ _id: new ObjectId(userId) });
-    const refreshToken = user?.twitter?.refreshToken;
-
-    if (!refreshToken) {
-      console.error("No refresh token found for user.");
-      return null;
-    }
-
-    console.log("Found refresh token, attempting to refresh access token...");
-
-    // Call Twitter's token refresh endpoint (OAuth 2.0)
-    const clientId = process.env.TWITTER_CLIENT_ID!;
-    const clientSecret = process.env.TWITTER_CLIENT_SECRET!;
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString(
-      "base64"
-    );
-
-    const response = await fetch("https://api.twitter.com/2/oauth2/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${credentials}`,
-      },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-      }).toString(),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error(
-        "Failed to refresh Twitter token:",
-        JSON.stringify(errorData)
-      );
-
-      // If the refresh token is invalid, clear it from the database
-      if (errorData.error === "invalid_request") {
-        console.log("Invalid refresh token. Clearing tokens from database.");
-        await users.updateOne(
-          { _id: new ObjectId(userId) },
-          {
-            $unset: {
-              "twitter.accessToken": "",
-              "twitter.refreshToken": "",
-              "twitter.expiresAt": "",
-            },
-          }
-        );
-      }
-
-      return null;
-    }
-
-    const data = await response.json();
-    const newAccessToken = data.access_token;
-    const newRefreshToken = data.refresh_token;
-
-    // Update the user's tokens in the database
-    await users.updateOne(
-      { _id: new ObjectId(userId) },
-      {
-        $set: {
-          "twitter.accessToken": newAccessToken,
-          "twitter.refreshToken": newRefreshToken,
-        },
-      }
-    );
-
-    return newAccessToken;
-  } catch (error) {
-    console.error("Error refreshing Twitter token:", error);
-    return null;
-  }
 }

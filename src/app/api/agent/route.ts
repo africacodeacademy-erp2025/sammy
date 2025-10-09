@@ -37,6 +37,7 @@ export interface GraphState {
   authToken?: string;
   isRandomPost?: boolean;
   isGreeting?: boolean;
+  attachments?: File[];
 }
 
 function detectPlatform(
@@ -651,6 +652,7 @@ const postWorkflow = new StateGraph<GraphState>({
     success: null,
     error: null,
     result: null,
+    attachments: null,
   },
 });
 postWorkflow.addNode("twitterPosting", twitterPosting as any);
@@ -795,7 +797,25 @@ export async function PUT(req: NextRequest) {
     }
 
     const userId = user._id.toString();
-    const { post, platform, threadId, isScheduled, _id } = await req.json();
+    const formData = await req.formData();
+
+    const post = formData.get("post") as string;
+    const platform = formData.get("platform") as string;
+    const threadId = formData.get("threadId") as string;
+    const isScheduled = formData.get("isScheduled") === "true";
+    const _id = formData.get("_id") as string | null;
+    const attachments = formData.getAll("attachments") as File[];
+
+    console.log("=== Agent PUT Debug ===");
+    console.log("Post:", post);
+    console.log("Platform:", platform);
+    console.log("ThreadId:", threadId);
+    console.log("Attachments received:", attachments.length);
+    attachments.forEach((file, index) => {
+      console.log(
+        `Agent attachment ${index}: ${file.name}, size: ${file.size}, type: ${file.type}`
+      );
+    });
 
     const platformResult = detectPlatform(post, platform);
     if (!platformResult.platform || platformResult.error) {
@@ -854,6 +874,7 @@ export async function PUT(req: NextRequest) {
       userId,
       tokens,
       authToken: authHeader,
+      attachments,
     });
 
     // Check for posting errors or failures

@@ -22,13 +22,62 @@ export async function facebookPosting(
     const validationError = validateFacebookPostState(state);
     if (validationError) return validationError;
 
-    const { post, authToken, tokens } = state;
+    const { post, authToken, tokens, attachments } = state;
     const { pageId, accessToken } = tokens!.facebook!;
 
     logFacebookPostAttempt(state, pageId);
 
-    const requestBody = createFacebookPostRequest(post!, pageId, accessToken);
-    const response = await sendFacebookPostRequest(requestBody, authToken!);
+    console.log("=== FacebookPosting Debug ===");
+    console.log("Attachments in state:", attachments?.length || 0);
+    if (attachments) {
+      attachments.forEach((file, index) => {
+        console.log(
+          `FacebookPosting attachment ${index}: ${file.name}, size: ${file.size}, type: ${file.type}`
+        );
+      });
+    }
+
+    const formData = new FormData();
+    formData.append("post", post!);
+    formData.append("platform", "facebook");
+    formData.append(
+      "tokens",
+      JSON.stringify({
+        facebook: {
+          pageId,
+          accessToken,
+        },
+      })
+    );
+
+    if (attachments) {
+      attachments.forEach((file, index) => {
+        console.log(`Adding attachment ${index} to FormData: ${file.name}`);
+        formData.append("attachments", file);
+      });
+    }
+
+    console.log("FormData entries being sent:");
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(
+          `${key}: File(${value.name}, ${value.size} bytes, ${value.type})`
+        );
+      } else {
+        console.log(`${key}: ${value}`);
+      }
+    }
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_URL}${FACEBOOK_POSTING_ENDPOINT}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: authToken!,
+        },
+        body: formData,
+      }
+    );
 
     if (!response.ok) {
       return await handleFacebookPostError(response, state);
@@ -82,40 +131,6 @@ function logFacebookPostAttempt(state: GraphState, pageId: string): void {
     authToken,
     pageId,
   });
-}
-
-function createFacebookPostRequest(
-  post: string,
-  pageId: string,
-  accessToken: string
-): FacebookPostRequest {
-  return {
-    post,
-    platform: "facebook",
-    tokens: {
-      facebook: {
-        pageId,
-        accessToken,
-      },
-    },
-  };
-}
-
-async function sendFacebookPostRequest(
-  requestBody: FacebookPostRequest,
-  authToken: string
-): Promise<Response> {
-  return fetch(
-    `${process.env.NEXT_PUBLIC_BASE_URL}${FACEBOOK_POSTING_ENDPOINT}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `${authToken}`,
-      },
-      body: JSON.stringify(requestBody),
-    }
-  );
 }
 
 async function handleFacebookPostError(

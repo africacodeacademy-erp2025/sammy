@@ -10,10 +10,12 @@ export interface Message {
     | "posted"
     | "error"
     | "rejected"
-    | "scheduled";
+    | "scheduled"
+    | "pending_approval";
   threadId?: string;
   platform?: string;
   timestamp: number | string;
+  attachments?: File[];
 }
 
 export interface ScheduledPost {
@@ -31,4 +33,5 @@ export interface MessageBubbleProps {
   onReject: (id: string) => void;
   isLatestAiMessage: boolean;
   onEditSave?: (id: string, content: string) => void;
+  onAttachmentsChange?: (id: string, attachments: File[]) => void;
 }

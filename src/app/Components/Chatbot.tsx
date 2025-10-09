@@ -84,6 +84,15 @@ export default function ChatBot() {
     []
   );
 
+  const handleAttachmentsChange = useCallback(
+    (id: string, attachments: File[]) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === id ? { ...msg, attachments } : msg))
+      );
+    },
+    []
+  );
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userInput = input.trim();
@@ -178,17 +187,42 @@ export default function ChatBot() {
     updateMessageStatus(id, "posting");
 
     try {
+      const formData = new FormData();
+      formData.append("post", draft.content);
+      if (draft.platform) {
+        formData.append("platform", draft.platform);
+      }
+      formData.append("threadId", draft.threadId);
+
+      console.log("=== ChatBot Debug ===");
+      console.log("Draft attachments:", draft.attachments?.length || 0);
+
+      if (draft.attachments) {
+        draft.attachments.forEach((file, index) => {
+          console.log(
+            `Adding attachment ${index}: ${file.name}, size: ${file.size}, type: ${file.type}`
+          );
+          formData.append("attachments", file);
+        });
+      }
+
+      console.log("FormData entries:");
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          console.log(
+            `${key}: File(${value.name}, ${value.size} bytes, ${value.type})`
+          );
+        } else {
+          console.log(`${key}: ${value}`);
+        }
+      }
+
       const res = await fetch("/api/agent", {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({
-          post: draft.content,
-          platform: draft.platform,
-          threadId: draft.threadId,
-        }),
+        body: formData,
       });
 
       const data = await res.json();
@@ -362,6 +396,7 @@ export default function ChatBot() {
               onApprove={handleApproveDraft}
               onReject={handleRejectDraft}
               isLatestAiMessage={msg.id === latestAiMessageId}
+              onAttachmentsChange={handleAttachmentsChange}
             />
           ))}
 
