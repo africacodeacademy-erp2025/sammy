@@ -6,4 +6,6 @@ export type UserDoc = {
   passwordHash: string;
   name?: string;
   createdAt?: Date;
+  resetToken?: string;
+  resetTokenExpiry?: Date;
 };

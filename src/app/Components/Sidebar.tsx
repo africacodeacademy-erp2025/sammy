@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import SidebarButton from "./UI/SidebarButton";
 import PayButton from "./UI/PayButton";
+import SidebarButton from "./UI/SidebarButton";
 
 export default function Sidebar({
   isOpen,
