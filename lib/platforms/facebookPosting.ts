@@ -1,4 +1,6 @@
 import { GraphState } from "../../src/app/api/agent/route";
+import { connectDB } from "../mongo";
+import { ObjectId } from "mongodb";
 
 const FACEBOOK_POSTING_ENDPOINT = "/api/postings/fb-posting";
 
@@ -29,7 +31,7 @@ export async function facebookPosting(
     const response = await sendFacebookPostRequest(requestBody, authToken!);
 
     if (!response.ok) {
-      return await handleFacebookPostError(response);
+      return await handleFacebookPostError(response, state);
     }
 
     const data = await response.json();
@@ -117,21 +119,102 @@ async function sendFacebookPostRequest(
 }
 
 async function handleFacebookPostError(
-  response: Response
+  response: Response,
+  state: GraphState
 ): Promise<Partial<GraphState>> {
-  let errorMessage: string;
+  let errorData;
+  let errorMessage;
 
   try {
-    const errData = await response.json();
-    errorMessage = JSON.stringify(errData, null, 2);
-    console.error("Facebook API failed:", errData);
+    errorData = await response.json();
+    errorMessage = JSON.stringify(errorData, null, 2);
+    console.error("Facebook API failed:", errorData);
   } catch {
     errorMessage = await response.text();
     console.error("Facebook API failed (raw):", errorMessage);
+    return {
+      success: false,
+      error: `Could not post to Facebook. ${response.status} error.`,
+    };
+  }
+
+  // Check for expired token (error code 190 is common for this)
+  if (errorData?.data?.error?.code === 190) {
+    console.log("Facebook token expired. Attempting to refresh...");
+    const newAccessToken = await refreshFacebookToken(state.userId!);
+
+    if (newAccessToken) {
+      console.log("Facebook token refreshed successfully. Retrying post...");
+      // Update state with the new token and retry
+      const newTokens = { ...state.tokens! };
+      newTokens.facebook!.accessToken = newAccessToken;
+      return facebookPosting({ ...state, tokens: newTokens });
+    } else {
+      return {
+        success: false,
+        error:
+          "Facebook token is expired and could not be refreshed. Please re-authenticate.",
+      };
+    }
   }
 
   return {
     success: false,
     error: `Could not post to Facebook. ${response.status} error.`,
   };
+}
+
+/**
+ * Exchanges a short-lived Facebook user access token for a long-lived one.
+ * Updates the user's document in the database with the new token.
+ */
+export async function refreshFacebookToken(
+  userId: string
+): Promise<string | null> {
+  try {
+    const db = await connectDB();
+    const users = db.collection("users");
+
+    const user = await users.findOne({ _id: new ObjectId(userId) });
+    const shortLivedToken = user?.facebook?.accessToken;
+
+    if (!shortLivedToken) {
+      console.error("No Facebook access token found for user to refresh.");
+      return null;
+    }
+
+    const clientId = process.env.FACEBOOK_CLIENT_ID;
+    const clientSecret = process.env.FACEBOOK_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      console.error("Facebook client ID or secret not configured.");
+      return null;
+    }
+
+    const url = `https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${shortLivedToken}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok || !data.access_token) {
+      console.error(
+        "Failed to refresh Facebook token:",
+        data.error?.message || "Unknown error"
+      );
+      return null;
+    }
+
+    const longLivedToken = data.access_token;
+
+    await users.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { "facebook.accessToken": longLivedToken } }
+    );
+
+    console.log("Successfully exchanged for a long-lived Facebook token.");
+    return longLivedToken;
+  } catch (error: any) {
+    console.error("Error refreshing Facebook token:", error.message);
+    return null;
+  }
 }

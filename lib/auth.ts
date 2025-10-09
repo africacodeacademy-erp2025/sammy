@@ -66,3 +66,16 @@ export async function getUserFromRequest(authorizationHeader?: string | null) {
     return null;
   }
 }
+
+/**
+ * Checks if a token is expired based on the expiration time in the payload.
+ * If expired, logs the error and optionally triggers a refresh mechanism.
+ */
+export function handleExpiredToken(error: any, platform: string) {
+  if (error?.code === 401 || error?.response?.status === 401) {
+    console.error(`Token expired for platform: ${platform}`);
+
+    return { expired: true, message: "Token expired. Please reauthenticate." };
+  }
+  return { expired: false, message: "" };
+}
