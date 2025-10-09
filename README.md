@@ -149,9 +149,12 @@ For issues, questions, or contributions:
 ✅ "Schedule a Facebook post for next Monday 3pm UTC"
 ✅ "Create a tweet about AI in 2 hours"
 ✅ "Post to Facebook on Oct 15 at 10:30 UTC"
-```atures
+```
+
+## ✨ Key Features
 
 - 🔐 **One-Click OAuth 2.0** - Connect Twitter, Facebook, and Slack accounts with secure OAuth flows (no manual API keys!)
+- 🔑 **Complete Authentication System** - Secure user registration, login, password reset with email verification, and profile management
 - 🤖 **AI Content Generation** - OpenAI-powered post creation with context-aware drafting
 - 📊 **Automatic Context Learning** - Pulls and analyzes your past posts and Slack messages to match your writing style
 - 🎯 **Vector-Based Intelligence** - Uses MongoDB vector search with embeddings for semantic post analysis
@@ -159,8 +162,10 @@ For issues, questions, or contributions:
 - ✅ **Review & Approve Workflow** - Preview generated posts before publishing
 - 🔒 **Enterprise Security** - AES-256-GCM encryption for all credentials and tokens
 - 🚀 **Multi-Platform** - Simultaneous posting to Twitter/X and Facebook
-- � **Slack Integration** - Automatic message ingestion for context learning with real-time webhook support
-- �📱 **Modern Stack** - Next.js 15, React 19, TypeScript, Tailwind CSS
+- 💬 **Slack Integration** - Automatic message ingestion for context learning with real-time webhook support
+- 📱 **Modern Stack** - Next.js 15, React 19, TypeScript, Tailwind CSS
+- 📧 **Email Notifications** - Password reset emails with Gmail SMTP integration
+- 👤 **Profile Management** - Update email, change password, and manage account settings
 
 ## 🚀 Quick Start
 
@@ -225,6 +230,20 @@ cp .env.example .env
    - Request URL: `https://your-domain.com/api/sources/slack/events`
    - Subscribe to `message.channels` and `message.groups` events
 
+**Gmail SMTP (for password reset emails):**
+
+1. **Enable 2-Step Verification** for your Gmail account
+2. Go to [Google Account Settings](https://myaccount.google.com/) → Security
+3. Under "How you sign in to Google" → "2-Step Verification"
+4. Scroll down to "App passwords" and click "Generate"
+5. Select "Mail" and "Other (custom name)" → enter "SaMMy App"
+6. Copy the generated 16-character app password
+7. Add to `.env`:
+   ```bash
+   SMTP_USER=your_gmail_address@gmail.com
+   SMTP_PASS=your_16_character_app_password
+   ```
+
 ### 4. Start Development
 
 ```bash
@@ -239,6 +258,19 @@ npx tsx workers/schedulePostWorker.ts
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### 6. Test Email Functionality (Optional)
+
+To verify that password reset emails are working:
+
+```bash
+# Test the email configuration
+curl -X POST http://localhost:3000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "your_test_email@example.com"}'
+```
+
+Check your email for the password reset link. The system will also log fallback reset links to the console if email delivery fails.
+
 ## 📚 How It Works
 
 ### User Flow
@@ -249,6 +281,33 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 4. **Generate Content** - Chat with AI to create posts: "Create a Twitter post about AI trends"
 5. **Review & Approve** - Preview generated content before publishing
 6. **Schedule or Post** - Post immediately or schedule for later
+
+### 🔐 Authentication & Security Features
+
+**Complete User Management System:**
+
+- **User Registration & Login** - Secure account creation with email/password and JWT authentication
+- **Password Reset Flow** - Forgot password functionality with secure email verification
+  - Dynamic base URL detection (works in any deployment environment)
+  - Gmail SMTP integration for reliable email delivery
+  - Secure token generation with 24-hour expiration
+  - Clean, professional email templates with branding
+- **Profile Management Sidebar** - In-app user profile management with tabbed interface
+  - **Email Update** - Change account email with validation
+  - **Password Change** - Update password with current password verification
+  - **Real-time Validation** - Form validation with user-friendly error messages
+- **Security Best Practices**
+  - JWT token-based authentication
+  - bcrypt password hashing with salt
+  - Secure token generation for password resets
+  - Input validation and sanitization
+  - Environment-aware email configuration
+
+**Email Integration:**
+- **Gmail SMTP** - Reliable email delivery using Gmail's SMTP service
+- **Professional Templates** - Branded email templates with modern design
+- **Dynamic URLs** - Automatically detects deployment environment (localhost, production, etc.)
+- **Fallback Logging** - Debug support with fallback reset links in console logs
 
 ### Intelligent Context System
 
@@ -387,6 +446,10 @@ extractScheduleTime → [if scheduled] → END
 | POST | `/api/auth/signup` | Create new user account |
 | POST | `/api/auth/signin` | Login (returns JWT token) |
 | GET | `/api/auth/me` | Get current user profile |
+| POST | `/api/auth/forgot-password` | Send password reset email |
+| POST | `/api/auth/reset-password` | Reset password with token |
+| PUT | `/api/auth/change-password` | Change password (authenticated) |
+| PUT | `/api/auth/update-email` | Update user email (authenticated) |
 
 ### OAuth Integration
 | Method | Endpoint | Description |
@@ -545,6 +608,14 @@ FACEBOOK_REDIRECT_URI=http://localhost:3000/api/integrations/facebook/callback
 SLACK_CLIENT_ID=your_slack_oauth2_client_id
 SLACK_CLIENT_SECRET=your_slack_oauth2_client_secret
 SLACK_REDIRECT_URI=http://localhost:3000/api/integrations/slack/callback
+
+# ============================================
+# Email Configuration (Gmail SMTP)
+# ============================================
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_gmail_address@gmail.com
+SMTP_PASS=your_gmail_app_password
 ```
 
 ### Environment Variable Notes
@@ -565,6 +636,12 @@ SLACK_REDIRECT_URI=http://localhost:3000/api/integrations/slack/callback
 
   - Development: `http://localhost:3000/api/integrations/{platform}/callback`
   - Production: Update with your production domain
+
+- **Gmail SMTP Configuration**:
+  - **SMTP_USER**: Your Gmail address
+  - **SMTP_PASS**: Gmail App Password (not your regular password)
+  - Generate App Password: [Google Account Settings](https://support.google.com/accounts/answer/185833) → Security → 2-Step Verification → App passwords
+  - Required for password reset email functionality
 
 - **NEXT_PUBLIC_BASE_URL**: Used internally for API calls between services
   pages?: [
@@ -665,7 +742,59 @@ curl -X POST http://localhost:3000/api/auth/signin \
 }
 ```
 
-### 3. Generate Immediate Post
+### 3. Password Reset Flow
+
+**Request Password Reset:**
+```bash
+curl -X POST http://localhost:3000/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "If an account exists with this email, a reset link has been sent."
+}
+```
+
+**Reset Password with Token:**
+```bash
+curl -X POST http://localhost:3000/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "reset_token_from_email",
+    "newPassword": "NewSecurePassword123"
+  }'
+```
+
+### 4. Profile Management (Authenticated)
+
+**Change Password:**
+```bash
+curl -X PUT http://localhost:3000/api/auth/change-password \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -d '{
+    "currentPassword": "CurrentPassword123",
+    "newPassword": "NewSecurePassword123"
+  }'
+```
+
+**Update Email:**
+```bash
+curl -X PUT http://localhost:3000/api/auth/update-email \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_jwt_token" \
+  -d '{
+    "newEmail": "newemail@example.com"
+  }'
+```
+
+### 5. Generate Immediate Post
 
 ```bash
 curl -X POST http://localhost:3000/api/agent \

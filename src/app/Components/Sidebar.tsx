@@ -9,11 +9,13 @@ export default function Sidebar({
   onClose,
   onViewSchedule,
   onManageCredentials,
+  onOpenProfile,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onViewSchedule: () => void;
   onManageCredentials: () => void;
+  onOpenProfile: () => void;
 }) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
@@ -93,6 +95,13 @@ export default function Sidebar({
             title="Sources & Platform"
             description="Connect sources and platform"
             icon={<span className="text-green-400">🔑</span>}
+          />
+
+          <SidebarButton
+            onClick={onOpenProfile}
+            title="Profile Settings"
+            description="Update password and account settings"
+            icon={<span className="text-purple-400">👤</span>}
           />
 
           <PayButton priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID} />
