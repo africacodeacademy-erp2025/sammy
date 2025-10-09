@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import ForgotPassword from "./ForgotPassword";
 
 type LoginProps = {
   onSwitchToRegister: () => void;
@@ -15,6 +16,7 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleLogin = async () => {
     setError("");
@@ -37,6 +39,10 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
       setLoading(false);
     }
   };
+
+  if (showForgotPassword) {
+    return <ForgotPassword onBack={() => setShowForgotPassword(false)} />;
+  }
 
   return (
     <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg backdrop-blur-sm w-full max-w-md lg:w-[460px] lg:h-[350px]">
@@ -76,8 +82,18 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
           "Login"
         )}
       </button>
+      
+      <div className="mt-4 text-center">
+        <button
+          onClick={() => setShowForgotPassword(true)}
+          className="text-purple-400 hover:text-purple-300 hover:underline text-sm"
+        >
+          Forgot Password?
+        </button>
+      </div>
+      
       <p className="text-white/60 mt-4 text-center text-sm">
-        Don’t have an account?{" "}
+        Don&apos;t have an account?{" "}
         <button
           onClick={onSwitchToRegister}
           className="text-purple-500 hover:underline"

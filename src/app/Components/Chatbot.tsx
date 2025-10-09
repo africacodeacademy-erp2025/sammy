@@ -5,7 +5,9 @@ import ScheduledPostView from "./ScheduledPostsView";
 import MessageBubble from "../Components/MessageBubble";
 import Sidebar from "./Sidebar";
 import CredentialsSidebar from "./CredentialsSidebar";
+import ProfileSidebar from "./ProfileSidebar";
 import Image from "next/image";
+import { Settings, LogOut } from "lucide-react";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -14,6 +16,9 @@ export default function ChatBot() {
   const [isTyping, setIsTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [credentialsSidebarOpen, setCredentialsSidebarOpen] = useState(false);
+  const [profileSidebarOpen, setProfileSidebarOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "schedule">("chat");
   const [hasRequiredCredentials, setHasRequiredCredentials] = useState(false);
 
@@ -52,6 +57,9 @@ export default function ChatBot() {
         if (!res.ok) return;
 
         const user = await res.json();
+
+        // Set user email for profile dropdown
+        setUserEmail(user.email);
 
         if (user.slack && user.twitter && user.facebook) {
           setHasRequiredCredentials(true);
@@ -297,6 +305,40 @@ export default function ChatBot() {
     setSidebarOpen(false);
   };
 
+  // Profile dropdown handlers
+  const toggleProfileDropdown = () => {
+    setProfileDropdownOpen(!profileDropdownOpen);
+  };
+
+  const handleProfileSettings = () => {
+    setProfileSidebarOpen(true);
+    setProfileDropdownOpen(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setUserEmail(null);
+    setProfileDropdownOpen(false);
+    window.location.href = "/";
+  };
+
+  const getInitials = (email: string) => {
+    return email.slice(0, 2).toUpperCase();
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (profileDropdownOpen && !target.closest('.profile-dropdown')) {
+        setProfileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [profileDropdownOpen]);
+
   if (view === "schedule") {
     return <ScheduledPostView onBack={handleBackToChat} />;
   }
@@ -315,6 +357,12 @@ export default function ChatBot() {
       <CredentialsSidebar
         isOpen={credentialsSidebarOpen}
         onClose={() => setCredentialsSidebarOpen(false)}
+      />
+
+      {/* Profile Sidebar */}
+      <ProfileSidebar
+        isOpen={profileSidebarOpen}
+        onClose={() => setProfileSidebarOpen(false)}
       />
 
       {/* Main Chat Area */}
@@ -347,6 +395,55 @@ export default function ChatBot() {
                 Clear
               </button>
             )}
+
+            {/* User Profile Dropdown */}
+            {userEmail && (
+              <div className="relative profile-dropdown">
+                <button
+                  onClick={toggleProfileDropdown}
+                  className="w-8 h-8 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white font-bold text-xs transition-colors border-2 border-transparent hover:border-purple-400"
+                  title={userEmail}
+                >
+                  {getInitials(userEmail)}
+                </button>
+
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-2 z-50">
+                    {/* User Info */}
+                    <div className="px-4 py-3 border-b border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                          {getInitials(userEmail)}
+                        </div>
+                        <div>
+                          <p className="text-white font-medium text-sm">{userEmail}</p>
+                          <p className="text-gray-400 text-xs">Signed in</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-1">
+                      <button
+                        onClick={handleProfileSettings}
+                        className="w-full px-4 py-2 text-left text-gray-300 hover:text-white hover:bg-gray-700 transition-colors flex items-center gap-3"
+                      >
+                        <Settings size={16} />
+                        <span className="text-sm">Profile Settings</span>
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full px-4 py-2 text-left text-gray-300 hover:text-white hover:bg-gray-700 transition-colors flex items-center gap-3"
+                      >
+                        <LogOut size={16} />
+                        <span className="text-sm">Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={toggleSidebar}
               className="px-3 py-1.5 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center justify-center"
