@@ -87,3 +87,10 @@ export function decrypt(encryptedData: string): string {
 
   return decrypted;
 }
+
+/**
+ * Generate a secure random reset token
+ */
+export function generateResetToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
