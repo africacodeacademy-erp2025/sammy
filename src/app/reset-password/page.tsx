@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -64,7 +65,8 @@ export default function ResetPasswordPage() {
         setError(data.error || "Failed to reset password");
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to reset password";
+      const message =
+        err instanceof Error ? err.message : "Failed to reset password";
       setError(message);
     } finally {
       setLoading(false);
@@ -89,9 +91,12 @@ export default function ResetPasswordPage() {
                 <span className="text-white text-lg">✓</span>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">Password Reset Successful</h2>
+            <h2 className="text-2xl font-bold text-white mb-4">
+              Password Reset Successful
+            </h2>
             <p className="text-gray-300 mb-6">
-              Your password has been successfully reset. You will be redirected to the login page in a few seconds.
+              Your password has been successfully reset. You will be redirected
+              to the login page in a few seconds.
             </p>
             <button
               onClick={() => router.push("/")}
@@ -108,7 +113,9 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 flex items-center justify-center p-4">
       <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg backdrop-blur-sm w-full max-w-md">
-        <h2 className="text-2xl font-bold text-white mb-2 text-center">Reset Password</h2>
+        <h2 className="text-2xl font-bold text-white mb-2 text-center">
+          Reset Password
+        </h2>
         <p className="text-gray-400 mb-6 text-center text-sm">
           Enter your new password below.
         </p>
