@@ -39,12 +39,6 @@ export default function Sidebar({
 
   const getInitials = (email: string) => email.slice(0, 2).toUpperCase();
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setUserEmail(null);
-    window.location.href = "/";
-  };
-
   return (
     <>
       {isOpen && (
@@ -65,7 +59,7 @@ export default function Sidebar({
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {userEmail && (
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs">
+              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-[11px] leading-none uppercase overflow-hidden shrink-0 select-none">
                 {getInitials(userEmail)}
               </div>
             )}
@@ -98,15 +92,8 @@ export default function Sidebar({
           <PayButton priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID} />
         </div>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-700 mt-auto">
-          <SidebarButton
-            onClick={handleLogout}
-            title="Logout"
-            description="Sign out of your account"
-            icon={<span className="text-red-400">⇦</span>}
-          />
-        </div>
+        {/* Footer spacer (no logout) */}
+        <div className="p-2" />
       </div>
     </>
   );

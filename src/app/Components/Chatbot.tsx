@@ -1,13 +1,13 @@
 "use client";
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message } from "../Types";
-import ScheduledPostView from "./ScheduledPostsView";
+import { LogOut, Settings } from "lucide-react";
+import Image from "next/image";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import MessageBubble from "../Components/MessageBubble";
-import Sidebar from "./Sidebar";
+import { Message } from "../Types";
 import CredentialsSidebar from "./CredentialsSidebar";
 import ProfileSidebar from "./ProfileSidebar";
-import Image from "next/image";
-import { Settings, LogOut } from "lucide-react";
+import ScheduledPostView from "./ScheduledPostsView";
+import Sidebar from "./Sidebar";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -401,7 +401,7 @@ export default function ChatBot() {
               <div className="relative profile-dropdown">
                 <button
                   onClick={toggleProfileDropdown}
-                  className="w-8 h-8 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white font-bold text-xs transition-colors border-2 border-transparent hover:border-purple-400"
+                  className="w-8 h-8 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white font-bold text-[11px] leading-none uppercase transition-colors border-2 border-transparent hover:border-purple-400 overflow-hidden shrink-0 select-none"
                   title={userEmail}
                 >
                   {getInitials(userEmail)}
@@ -412,7 +412,7 @@ export default function ChatBot() {
                     {/* User Info */}
                     <div className="px-4 py-3 border-b border-gray-700">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm leading-none uppercase overflow-hidden shrink-0 select-none">
                           {getInitials(userEmail)}
                         </div>
                         <div>
