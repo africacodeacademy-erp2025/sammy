@@ -1,5 +1,5 @@
 "use client";
-import { LogOut, Settings } from "lucide-react";
+// Icons handled within ProfileMenu component
 import Image from "next/image";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import MessageBubble from "../Components/MessageBubble";
@@ -8,6 +8,7 @@ import CredentialsSidebar from "./CredentialsSidebar";
 import ProfileSidebar from "./ProfileSidebar";
 import ScheduledPostView from "./ScheduledPostsView";
 import Sidebar from "./Sidebar";
+import ProfileMenu from "./UI/ProfileMenu";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -322,9 +323,7 @@ export default function ChatBot() {
     window.location.href = "/";
   };
 
-  const getInitials = (email: string) => {
-    return email.slice(0, 2).toUpperCase();
-  };
+  // getInitials now handled inside ProfileMenu component
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -398,50 +397,13 @@ export default function ChatBot() {
 
             {/* User Profile Dropdown */}
             {userEmail && (
-              <div className="relative profile-dropdown">
-                <button
-                  onClick={toggleProfileDropdown}
-                  className="w-8 h-8 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center text-white font-bold text-[11px] leading-none uppercase transition-colors border-2 border-transparent hover:border-purple-400 overflow-hidden shrink-0 select-none"
-                  title={userEmail}
-                >
-                  {getInitials(userEmail)}
-                </button>
-
-                {profileDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-2 z-50">
-                    {/* User Info */}
-                    <div className="px-4 py-3 border-b border-gray-700">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm leading-none uppercase overflow-hidden shrink-0 select-none">
-                          {getInitials(userEmail)}
-                        </div>
-                        <div>
-                          <p className="text-white font-medium text-sm">{userEmail}</p>
-                          <p className="text-gray-400 text-xs">Signed in</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Menu Items */}
-                    <div className="py-1">
-                      <button
-                        onClick={handleProfileSettings}
-                        className="w-full px-4 py-2 text-left text-gray-300 hover:text-white hover:bg-gray-700 transition-colors flex items-center gap-3"
-                      >
-                        <Settings size={16} />
-                        <span className="text-sm">Profile Settings</span>
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full px-4 py-2 text-left text-gray-300 hover:text-white hover:bg-gray-700 transition-colors flex items-center gap-3"
-                      >
-                        <LogOut size={16} />
-                        <span className="text-sm">Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ProfileMenu
+                email={userEmail}
+                open={profileDropdownOpen}
+                onToggle={toggleProfileDropdown}
+                onProfileSettings={handleProfileSettings}
+                onLogout={handleLogout}
+              />
             )}
 
             <button
