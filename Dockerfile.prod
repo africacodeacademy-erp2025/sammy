@@ -21,7 +21,6 @@ ARG MONGO_URI
 ARG DATABASE_NAME
 ARG JWT_SECRET
 ARG OPENAI_API_KEY
-ARG REDIS_URL
 ARG JWT_EXPIRES_IN
 ARG ENC_SECRET
 
@@ -30,7 +29,6 @@ ENV MONGO_URI=${MONGO_URI}
 ENV DATABASE_NAME=${DATABASE_NAME}
 ENV JWT_SECRET=${JWT_SECRET}
 ENV OPENAI_API_KEY=${OPENAI_API_KEY}
-ENV REDIS_URL=${REDIS_URL}
 ENV JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
 ENV ENC_SECRET=${ENC_SECRET}
 
@@ -51,8 +49,21 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/workers ./workers
+COPY --from=builder /app/lib ./lib
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/models ./models
+
+# Copy startup script
+COPY docker-entrypoint.sh .
+RUN chmod +x docker-entrypoint.sh
+
+# Change ownership to nextjs user
+USER root
+RUN chown -R nextjs:nodejs /app
+USER nextjs
 
 # Next.js runtime variables (runtime secrets go here via env_file)
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["./docker-entrypoint.sh"]

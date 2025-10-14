@@ -13,6 +13,12 @@ type ScheduledPost = {
   post?: string;
   threadId?: string;
   updatedAt?: Date;
+  jobId?: string;
+  jobStatus?: "pending" | "active" | "completed" | "failed";
+  executionAttempts?: number;
+  lastExecutionAt?: Date;
+  processedAt?: Date;
+  failureReason?: string;
 };
 
 type ScheduledPostsResponse = {
@@ -71,6 +77,34 @@ export async function DELETE(req: NextRequest) {
     const db = await connectDB();
     const scheduledPosts = db.collection<ScheduledPost>("scheduledPosts");
 
+    // Find the post first
+    const post = await scheduledPosts.findOne({
+      _id: new ObjectId(id),
+      userId: user._id.toString(),
+    });
+
+    if (!post) {
+      return NextResponse.json(
+        { error: "Post not found or unauthorized" },
+        { status: 404 }
+      );
+    }
+
+    // Cancel the Agenda job if it exists
+    if (post.jobId) {
+      try {
+        const { cancelScheduledPost } = await import(
+          "../../../../workers/schedulePostWorker"
+        );
+        await cancelScheduledPost(post.jobId);
+        console.log(`✅ Cancelled Agenda job ${post.jobId}`);
+      } catch (err) {
+        console.error("Failed to cancel Agenda job:", err);
+        // Continue with deletion even if cancellation fails
+      }
+    }
+
+    // Delete from MongoDB (source of truth)
     const result = await scheduledPosts.deleteOne({
       _id: new ObjectId(id),
       userId: user._id.toString(),
