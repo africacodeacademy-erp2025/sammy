@@ -18,124 +18,303 @@ const agenda = new Agenda({
   defaultLockLifetime: 10000,
 });
 
+// Track initialization state
+let isInitialized = false;
+let isInitializing = false;
+let initPromise: Promise<void> | null = null;
+
 // Initialize Agenda with existing MongoDB connection
 async function initializeAgenda() {
-  // Connect to MongoDB first to ensure it's available
-  await connectDB();
+  // If already initialized, return immediately
+  if (isInitialized) {
+    return;
+  }
 
-  console.log("✅ MongoDB connection verified");
+  // If currently initializing, wait for the existing initialization to complete
+  if (isInitializing && initPromise) {
+    await initPromise;
+    return;
+  }
 
-  // Define job processors
-  agenda.define(
-    "process-scheduled-post",
-    async (job: Job<{ postId: string }>) => {
-      const { postId } = job.attrs.data;
+  // Start initialization
+  isInitializing = true;
+  initPromise = (async () => {
+    try {
+      // Connect to MongoDB first to ensure it's available
+      await connectDB();
+      console.log("✅ MongoDB connection verified");
 
-      console.log(`📝 Processing scheduled post: ${postId}`);
+      // Define job processors
+      agenda.define(
+        "process-scheduled-post",
+        async (job: Job<{ postId: string }>) => {
+          const { postId } = job.attrs.data;
 
-      const db = await connectDB();
-      const scheduledPosts = db.collection("scheduledPosts");
+          console.log(`📝 Processing scheduled post: ${postId}`);
 
-      try {
-        // Fetch post from MongoDB
-        const scheduledPost = await scheduledPosts.findOne({
-          _id: new ObjectId(postId),
+          const db = await connectDB();
+          const scheduledPosts = db.collection("scheduledPosts");
+
+          try {
+            // Fetch post from MongoDB
+            const scheduledPost = await scheduledPosts.findOne({
+              _id: new ObjectId(postId),
+            });
+
+            if (!scheduledPost) {
+              throw new Error(`Scheduled post ${postId} not found in database`);
+            }
+
+            // Check if post was already processed (skip duplicate processing)
+            if (
+              scheduledPost.status === "ready_for_review" ||
+              scheduledPost.status === "posted"
+            ) {
+              console.log(
+                `⚠️ Post ${postId} already processed (status: ${scheduledPost.status}), skipping`
+              );
+              return;
+            }
+
+            // Generate post content at scheduled time (normal path)
+            console.log(`📝 Generating content for scheduled post: ${postId}`);
+
+            const state: GraphState = {
+              prompt: scheduledPost.prompt,
+              platform: scheduledPost.platform,
+              userId: scheduledPost.userId,
+            };
+
+            const result = await generatePost(state);
+
+            if (!result.post || !result.threadId) {
+              throw new Error("Failed to generate post content");
+            }
+
+            // Update with generated content and mark as ready for review
+            await scheduledPosts.updateOne(
+              { _id: new ObjectId(postId) },
+              {
+                $set: {
+                  post: result.post,
+                  threadId: result.threadId,
+                  platform: state.platform,
+                  status: "ready_for_review",
+                  isScheduled: true,
+                  processedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              }
+            );
+
+            console.log(`✅ Post ${postId} generated and ready for review`);
+          } catch (err: any) {
+            console.error(`❌ Failed to process post ${postId}:`, err.message);
+
+            // Update with failure info
+            await scheduledPosts.updateOne(
+              { _id: new ObjectId(postId) },
+              {
+                $set: {
+                  status: "failed",
+                  failureReason: err.message,
+                  updatedAt: new Date(),
+                },
+              }
+            );
+
+            throw err; // Agenda will handle retries
+          }
+        }
+      );
+
+      // Define cleanup job for old completed/failed jobs (Free tier optimization)
+      agenda.define("cleanup-old-jobs", async () => {
+        console.log("🧹 Running cleanup of old agenda jobs...");
+        const db = await connectDB();
+
+        // Remove jobs older than 7 days
+        const result = await db.collection("agendaJobs").deleteMany({
+          lastFinishedAt: {
+            $lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+          },
         });
 
-        if (!scheduledPost) {
-          throw new Error(`Scheduled post ${postId} not found in database`);
-        }
+        console.log(`🗑️ Cleaned up ${result.deletedCount} old jobs`);
+      });
 
-        // Check if post content already exists (new format)
-        if (scheduledPost.post && scheduledPost.threadId) {
+      // Define recurring schedule processor job
+      agenda.define("process-recurring-schedules", async () => {
+        console.log("🔄 Processing recurring schedules...");
+
+        try {
+          const db = await connectDB();
+          const recurringSchedules = db.collection("recurringSchedules");
+          const scheduledPosts = db.collection("scheduledPosts");
+
+          // Find all active recurring templates
+          const templates = await recurringSchedules
+            .find({
+              status: "active",
+              isRecurring: true,
+            })
+            .toArray();
+
+          if (templates.length === 0) {
+            console.log("✅ No active recurring schedules found");
+            return;
+          }
+
           console.log(
-            `✅ Post ${postId} already has content, marking as ready for review`
+            `📋 Found ${templates.length} active recurring schedule(s)`
           );
 
-          // Update status to indicate it's ready (in case it wasn't already)
-          await scheduledPosts.updateOne(
-            { _id: new ObjectId(postId) },
-            {
-              $set: {
-                status: "ready_for_review",
-                processedAt: new Date(),
-                updatedAt: new Date(),
-              },
+          const now = new Date();
+          const lookAheadWindow = 14 * 24 * 60 * 60 * 1000; // 14 days
+          const lookAheadDate = new Date(now.getTime() + lookAheadWindow);
+
+          for (const template of templates) {
+            try {
+              // Import recurring schedule manager utilities
+              const { shouldCreateMoreOccurrences, calculateNextOccurrences } =
+                await import("../lib/recurringScheduleManager");
+
+              // Check if we should create more occurrences
+              if (!shouldCreateMoreOccurrences(template as any)) {
+                console.log(
+                  `⏹️ Template ${template._id} has reached its limit or end date`
+                );
+
+                // Mark as completed
+                await recurringSchedules.updateOne(
+                  { _id: template._id },
+                  {
+                    $set: {
+                      status: "completed",
+                      updatedAt: new Date(),
+                    },
+                  }
+                );
+                continue;
+              }
+
+              // Calculate next occurrences within look-ahead window
+              const nextOccurrences = calculateNextOccurrences(
+                template.recurrencePattern,
+                20, // Max 20 occurrences to create at once
+                template.lastOccurrenceCreatedAt || now
+              );
+
+              // Filter occurrences within look-ahead window
+              const occurrencesToCreate = nextOccurrences.filter(
+                (date) => date <= lookAheadDate
+              );
+
+              if (occurrencesToCreate.length === 0) {
+                console.log(
+                  `✅ Template ${template._id} already has enough scheduled occurrences`
+                );
+                continue;
+              }
+
+              // Check for already scheduled occurrences to avoid duplicates
+              let createdCount = 0;
+
+              for (const occurrenceDate of occurrencesToCreate) {
+                const scheduleTime = occurrenceDate.toISOString();
+
+                // Check if this occurrence already exists
+                const exists = await scheduledPosts.findOne({
+                  parentPostId: template._id,
+                  scheduleTime,
+                });
+
+                if (exists) {
+                  continue; // Skip if already created
+                }
+
+                // Create individual scheduled post
+                const inserted = await scheduledPosts.insertOne({
+                  userId: template.userId,
+                  prompt: template.prompt,
+                  platform: template.platform,
+                  scheduleTime,
+                  status: "scheduled",
+                  isScheduled: true,
+                  parentPostId: template._id, // Link to template
+                  occurrenceNumber: template.occurrenceCount + createdCount + 1,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                });
+
+                // Schedule the Agenda job for this occurrence
+                const job = await agenda.schedule(
+                  occurrenceDate,
+                  "process-scheduled-post",
+                  { postId: inserted.insertedId.toString() }
+                );
+
+                // Store job ID
+                await scheduledPosts.updateOne(
+                  { _id: inserted.insertedId },
+                  { $set: { jobId: job.attrs._id?.toString() } }
+                );
+
+                createdCount++;
+              }
+
+              if (createdCount > 0) {
+                // Update template
+                await recurringSchedules.updateOne(
+                  { _id: template._id },
+                  {
+                    $set: {
+                      occurrenceCount: template.occurrenceCount + createdCount,
+                      lastOccurrenceCreatedAt: new Date(),
+                      nextOccurrenceTime:
+                        occurrencesToCreate[createdCount - 1]?.toISOString(),
+                      updatedAt: new Date(),
+                    },
+                  }
+                );
+
+                console.log(
+                  `✅ Created ${createdCount} occurrence(s) for template ${template._id}`
+                );
+              }
+            } catch (err: any) {
+              console.error(
+                `❌ Error processing template ${template._id}:`,
+                err.message
+              );
             }
+          }
+
+          console.log("✅ Finished processing recurring schedules");
+        } catch (err: any) {
+          console.error(
+            "❌ Error in recurring schedule processor:",
+            err.message
           );
-
-          console.log(`✅ Post ${postId} is ready for review`);
-          return; // Job completed successfully
         }
+      });
 
-        // Legacy path: Generate post if it doesn't exist (backward compatibility)
-        console.log(
-          `📝 Generating content for legacy scheduled post: ${postId}`
-        );
+      console.log("✅ Job processors registered");
 
-        const state: GraphState = {
-          prompt: scheduledPost.prompt,
-          platform: scheduledPost.platform,
-          userId: scheduledPost.userId,
-        };
+      // Start Agenda
+      await agenda.start();
+      console.log("✅ Agenda started successfully");
 
-        const result = await generatePost(state);
-
-        // Update with generated content
-        await scheduledPosts.updateOne(
-          { _id: new ObjectId(postId) },
-          {
-            $set: {
-              post: result.post,
-              threadId: result.threadId,
-              platform: state.platform,
-              status: "ready_for_review",
-              isScheduled: true,
-              processedAt: new Date(),
-              updatedAt: new Date(),
-            },
-          }
-        );
-
-        console.log(`✅ Post ${postId} processed successfully`);
-      } catch (err: any) {
-        console.error(`❌ Failed to process post ${postId}:`, err.message);
-
-        // Update with failure info
-        await scheduledPosts.updateOne(
-          { _id: new ObjectId(postId) },
-          {
-            $set: {
-              status: "failed",
-              failureReason: err.message,
-              updatedAt: new Date(),
-            },
-          }
-        );
-
-        throw err; // Agenda will handle retries
-      }
+      // Mark as initialized
+      isInitialized = true;
+    } catch (err) {
+      isInitializing = false;
+      initPromise = null;
+      throw err;
     }
-  );
+  })();
 
-  // Define cleanup job for old completed/failed jobs (Free tier optimization)
-  agenda.define("cleanup-old-jobs", async () => {
-    console.log("🧹 Running cleanup of old agenda jobs...");
-    const db = await connectDB();
-
-    // Remove jobs older than 7 days
-    const result = await db.collection("agendaJobs").deleteMany({
-      lastFinishedAt: {
-        $lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
-      },
-    });
-
-    console.log(`🗑️ Cleaned up ${result.deletedCount} old jobs`);
-  });
-
-  console.log("✅ Job processors registered");
-
-  return agenda;
+  await initPromise;
 }
 
 // Auto-cleanup: Remove completed jobs immediately to save storage
@@ -281,6 +460,11 @@ async function processMissedScheduledPosts() {
     await agenda.every("24 hours", "cleanup-old-jobs");
     console.log("✅ Daily cleanup job scheduled");
 
+    // Schedule recurring schedule processor (runs every hour)
+    console.log("📅 Scheduling recurring schedule processor...");
+    await agenda.every("1 hour", "process-recurring-schedules");
+    console.log("✅ Recurring schedule processor scheduled (runs hourly)");
+
     // Process any missed/orphaned scheduled posts on startup
     console.log("🔍 Processing missed posts...");
     await processMissedScheduledPosts();
@@ -303,9 +487,9 @@ export async function schedulePost(
   scheduleTime: Date
 ): Promise<string> {
   // Ensure Agenda is initialized and ready
-  if (!agenda._ready) {
+  if (!isInitialized) {
+    console.log("🔄 Initializing Agenda for post scheduling...");
     await initializeAgenda();
-    await agenda.start();
   }
 
   // Schedule the job
@@ -322,9 +506,10 @@ export async function schedulePost(
 
 // Export function to cancel a scheduled post
 export async function cancelScheduledPost(jobId: string): Promise<boolean> {
-  if (!agenda._ready) {
+  // Ensure Agenda is initialized and ready
+  if (!isInitialized) {
+    console.log("🔄 Initializing Agenda for job cancellation...");
     await initializeAgenda();
-    await agenda.start();
   }
 
   const numRemoved = (await agenda.cancel({ _id: new ObjectId(jobId) })) || 0;

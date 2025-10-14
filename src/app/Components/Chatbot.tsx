@@ -4,8 +4,10 @@ import Image from "next/image";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import MessageBubble from "../Components/MessageBubble";
 import { Message } from "../Types";
+import type { RecurrencePattern } from "../Types/recurring";
 import CredentialsSidebar from "./CredentialsSidebar";
 import ProfileSidebar from "./ProfileSidebar";
+import RecurringScheduleModal from "./RecurringScheduleModal";
 import ScheduledPostView from "./ScheduledPostsView";
 import Sidebar from "./Sidebar";
 import ProfileMenu from "./UI/ProfileMenu";
@@ -22,6 +24,11 @@ export default function ChatBot() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "schedule">("chat");
   const [hasRequiredCredentials, setHasRequiredCredentials] = useState(false);
+  const [recurringModalOpen, setRecurringModalOpen] = useState(false);
+  const [recurringPattern, setRecurringPattern] =
+    useState<RecurrencePattern | null>(null);
+  const [recurringPrompt, setRecurringPrompt] = useState("");
+  const [recurringPlatform, setRecurringPlatform] = useState("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -102,6 +109,49 @@ export default function ChatBot() {
     []
   );
 
+  const handleConfirmRecurring = async (pattern: RecurrencePattern) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch("/api/recurring-schedules/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          pattern,
+          platform: recurringPlatform,
+          prompt: recurringPrompt,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create recurring schedule");
+      }
+
+      addMessage({
+        sender: "ai",
+        content: data.message || "Recurring schedule created successfully!",
+        status: "scheduled",
+      });
+
+      setRecurringModalOpen(false);
+    } catch (error) {
+      console.error("Error confirming recurring schedule:", error);
+      addMessage({
+        sender: "ai",
+        content:
+          error instanceof Error
+            ? error.message
+            : "Failed to create recurring schedule. Please try again.",
+        status: "error",
+      });
+    }
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userInput = input.trim();
@@ -140,6 +190,27 @@ export default function ChatBot() {
           sender: "ai",
           content: data.message,
           // No status for greetings - they don't need action buttons
+        });
+      } else if (data.recurring && data.needsConfirmation) {
+        // Recurring schedule detected - show modal for confirmation
+        setRecurringPattern(data.pattern);
+        setRecurringPrompt(userInput);
+        setRecurringPlatform(data.pattern.platform);
+        setRecurringModalOpen(true);
+        addMessage({
+          sender: "ai",
+          content:
+            data.message ||
+            "I detected a recurring schedule! Let me set that up for you...",
+        });
+      } else if (data.needsClarification) {
+        // Low-confidence recurring - ask for clarification
+        const suggestions = data.suggestions
+          ? "\n\nSuggestions:\n" + data.suggestions.join("\n")
+          : "";
+        addMessage({
+          sender: "ai",
+          content: (data.message || "Could you clarify?") + suggestions,
         });
       } else if (data.scheduled) {
         addMessage({
@@ -329,13 +400,13 @@ export default function ChatBot() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (profileDropdownOpen && !target.closest('.profile-dropdown')) {
+      if (profileDropdownOpen && !target.closest(".profile-dropdown")) {
         setProfileDropdownOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [profileDropdownOpen]);
 
   if (view === "schedule") {
@@ -526,6 +597,16 @@ export default function ChatBot() {
           </div>
         </div>
       </div>
+
+      {/* Recurring Schedule Modal */}
+      <RecurringScheduleModal
+        isOpen={recurringModalOpen}
+        onClose={() => setRecurringModalOpen(false)}
+        onConfirm={handleConfirmRecurring}
+        initialPattern={recurringPattern || undefined}
+        prompt={recurringPrompt}
+        platform={recurringPlatform}
+      />
     </div>
   );
 }

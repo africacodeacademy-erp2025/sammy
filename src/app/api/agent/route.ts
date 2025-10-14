@@ -396,6 +396,125 @@ Be intelligent about context clues and implicit time references.`,
   return { scheduleTime };
 }
 
+/**
+ * Detect and extract recurring schedule patterns from user prompt
+ */
+async function detectRecurringPattern(
+  prompt: string
+): Promise<import("../../Types/recurring").RecurrenceDetectionResult> {
+  const now = new Date().toISOString();
+  const currentDate = new Date();
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `You are an advanced recurring pattern detection assistant.
+Current UTC datetime: ${now}
+Current local timezone: ${timezone}
+Current day: ${currentDate.toLocaleDateString("en-US", { weekday: "long" })}
+
+Your task: Detect if the user wants a RECURRING schedule (posts that repeat automatically).
+
+Return JSON with this EXACT structure:
+{
+  "isRecurring": boolean,
+  "confidence": 0.0-1.0,
+  "pattern": {
+    "frequency": "daily" | "weekly" | "monthly" | "custom" | null,
+    "interval": number,
+    "daysOfWeek": ["Monday", "Friday"] or null,
+    "dayOfMonth": number or null,
+    "timeOfDay": "HH:mm" in 24-hour format,
+    "humanReadable": "Every Monday and Friday at 9:00 AM"
+  } or null,
+  "oneTimeSchedule": "YYYY-MM-DDTHH:mm:ssZ" or null,
+  "suggestions": ["example 1", "example 2"] or null
+}
+
+RECURRING PATTERNS TO DETECT:
+✅ "every day at 9am" → daily, confidence: 1.0
+✅ "daily at noon" → daily, confidence: 1.0
+✅ "every Monday" → weekly, daysOfWeek: ["Monday"]
+✅ "Mondays and Fridays at 2pm" → weekly, daysOfWeek: ["Monday", "Friday"]
+✅ "every weekday" → weekly, daysOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"]
+✅ "twice a week" → weekly (suggest specific days), confidence: 0.6
+✅ "every 2 days at 10am" → custom, interval: 2
+✅ "monthly on the 15th at noon" → monthly, dayOfMonth: 15
+✅ "on the 1st of every month" → monthly, dayOfMonth: 1
+
+NON-RECURRING (one-time):
+❌ "tomorrow at 3pm" → isRecurring: false, oneTimeSchedule: ISO date
+❌ "in 2 hours" → isRecurring: false, oneTimeSchedule: ISO date
+❌ "next Monday" → isRecurring: false, oneTimeSchedule: ISO date
+
+AMBIGUOUS (low confidence):
+⚠️ "post regularly" → confidence < 0.5, add suggestions
+⚠️ "a few times a week" → confidence < 0.5, add suggestions
+
+RULES:
+1. Set isRecurring: true ONLY if user wants REPEATING posts
+2. confidence > 0.8 = clear pattern
+3. confidence 0.5-0.8 = likely pattern, needs confirmation
+4. confidence < 0.5 = unclear, provide suggestions
+5. If one-time schedule detected, set isRecurring: false and provide oneTimeSchedule
+6. timeOfDay MUST be in HH:mm 24-hour format
+7. For weekly, daysOfWeek must be full names: "Monday", not "Mon"
+8. Generate helpful humanReadable description`,
+      },
+      { role: "user", content: prompt },
+    ],
+    max_tokens: 300,
+  });
+
+  try {
+    const result = JSON.parse(completion.choices[0].message?.content ?? "{}");
+
+    // Validate and sanitize the result
+    if (!result.isRecurring) {
+      return {
+        isRecurring: false,
+        confidence: result.confidence || 0,
+        pattern: null,
+        oneTimeSchedule: result.oneTimeSchedule || null,
+        suggestions: result.suggestions || null,
+      };
+    }
+
+    // Validate pattern if recurring
+    if (result.pattern) {
+      // Ensure timeOfDay is in correct format
+      if (!/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(result.pattern.timeOfDay)) {
+        result.pattern.timeOfDay = "09:00"; // Default fallback
+      }
+
+      // Ensure interval is valid
+      if (!result.pattern.interval || result.pattern.interval < 1) {
+        result.pattern.interval = 1;
+      }
+    }
+
+    return {
+      isRecurring: true,
+      confidence: result.confidence || 0,
+      pattern: result.pattern,
+      oneTimeSchedule: null,
+      suggestions: result.suggestions || null,
+    };
+  } catch (error) {
+    console.error("Error parsing recurring pattern:", error);
+    return {
+      isRecurring: false,
+      confidence: 0,
+      pattern: null,
+      oneTimeSchedule: null,
+    };
+  }
+}
+
 export async function generatePost(
   state: GraphState
 ): Promise<Partial<GraphState>> {
@@ -708,6 +827,90 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check for recurring pattern BEFORE one-time scheduling
+    const recurringDetection = await detectRecurringPattern(prompt);
+
+    // Handle high-confidence recurring patterns
+    if (
+      recurringDetection.isRecurring &&
+      recurringDetection.confidence >= 0.7
+    ) {
+      if (!recurringDetection.pattern) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Could not parse recurring pattern. Please try rephrasing.",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Import utility functions
+      const {
+        validateRecurrencePattern,
+        calculateNextOccurrences,
+        formatOccurrenceDate,
+      } = await import("../../../../lib/recurringScheduleManager");
+
+      // Validate the pattern
+      const validation = validateRecurrencePattern(recurringDetection.pattern);
+      if (!validation.isValid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: validation.error || "Invalid recurrence pattern",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Calculate preview occurrences
+      const nextOccurrences = calculateNextOccurrences(
+        recurringDetection.pattern,
+        5
+      );
+
+      // Return confirmation response (user will need to confirm)
+      return NextResponse.json({
+        success: true,
+        recurring: true,
+        needsConfirmation: true,
+        pattern: {
+          ...recurringDetection.pattern,
+          platform: platformResult.platform,
+          prompt,
+        },
+        preview: {
+          description: recurringDetection.pattern.humanReadable,
+          nextOccurrences: nextOccurrences.map((date: Date) => ({
+            date: date.toISOString(),
+            formatted: formatOccurrenceDate(date),
+          })),
+        },
+        message: `I'll set up a recurring schedule: ${recurringDetection.pattern.humanReadable}`,
+      });
+    }
+
+    // Handle low-confidence recurring patterns (provide suggestions)
+    if (
+      recurringDetection.isRecurring &&
+      recurringDetection.confidence > 0.3 &&
+      recurringDetection.confidence < 0.7
+    ) {
+      return NextResponse.json({
+        success: false,
+        needsClarification: true,
+        suggestions: recurringDetection.suggestions || [
+          "Try: 'Every day at 9am'",
+          "Try: 'Every Monday and Friday at 2pm'",
+          "Try: 'Monthly on the 15th at noon'",
+        ],
+        message:
+          "I think you want a recurring schedule, but I need more details. How often should I post?",
+      });
+    }
+
+    // Continue with existing one-time scheduling logic
     const result = await generateApp.invoke({
       prompt,
       platform: platformResult.platform,
@@ -729,28 +932,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (result.scheduleTime && typeof result.scheduleTime === "string") {
-      // Generate the post content immediately before scheduling
-      const postResult = await generatePost({
-        prompt,
-        platform: platformResult.platform,
-        userId,
-      });
-
-      // Insert scheduled post with generated content
+      // Store scheduled post with prompt only (post will be generated at scheduled time)
       const inserted = await db.collection("scheduledPosts").insertOne({
         userId,
         prompt,
         platform: platformResult.platform,
         scheduleTime: result.scheduleTime,
-        status: "ready_for_review",
+        status: "scheduled", // Keep as "scheduled" until the time arrives
         isScheduled: true,
-        post: postResult.post,
-        threadId: postResult.threadId,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
 
       // Schedule with Agenda (MongoDB-based scheduler)
+      // The worker will generate the post content when the time comes
       const { schedulePost } = await import(
         "../../../../workers/schedulePostWorker"
       );
@@ -769,9 +964,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         scheduled: true,
-        message: `Post scheduled for ${result.scheduleTime}`,
-        post: postResult.post,
-        threadId: postResult.threadId,
+        message: `Post scheduled for ${new Date(
+          result.scheduleTime
+        ).toLocaleString()}. It will be generated and ready for review at the scheduled time.`,
+        scheduleTime: result.scheduleTime,
+        platform: platformResult.platform,
       });
     }
 
@@ -817,14 +1014,35 @@ export async function PUT(req: NextRequest) {
     }
 
     const userId = user._id.toString();
-    const formData = await req.formData();
 
-    const post = formData.get("post") as string;
-    const platform = formData.get("platform") as string;
-    const threadId = formData.get("threadId") as string;
-    const isScheduled = formData.get("isScheduled") === "true";
-    const _id = formData.get("_id") as string | null;
-    const attachments = formData.getAll("attachments") as File[];
+    // Check Content-Type to determine if we're receiving FormData or JSON
+    const contentType = req.headers.get("content-type") || "";
+    let post: string;
+    let platform: string;
+    let threadId: string;
+    let isScheduled: boolean;
+    let _id: string | null;
+    let attachments: File[] = [];
+
+    if (contentType.includes("multipart/form-data")) {
+      // Handle FormData (with potential attachments)
+      const formData = await req.formData();
+      post = formData.get("post") as string;
+      platform = formData.get("platform") as string;
+      threadId = formData.get("threadId") as string;
+      isScheduled = formData.get("isScheduled") === "true";
+      _id = formData.get("_id") as string | null;
+      attachments = formData.getAll("attachments") as File[];
+    } else {
+      // Handle JSON (no attachments)
+      const body = await req.json();
+      post = body.post;
+      platform = body.platform;
+      threadId = body.threadId;
+      isScheduled = body.isScheduled || false;
+      _id = body._id || null;
+      attachments = [];
+    }
 
     console.log("=== Agent PUT Debug ===");
     console.log("Post:", post);
@@ -921,11 +1139,49 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    // Delete scheduled post after successful posting (reusing DELETE logic)
     if (isScheduled && _id) {
-      const deleteResult = await db.collection("scheduledPosts").deleteOne({
-        _id: new ObjectId(_id),
-      });
-      console.log(`Delete attempted for ${_id}, result:`, deleteResult);
+      try {
+        // Find the post first to get jobId
+        const post = await db.collection("scheduledPosts").findOne({
+          _id: new ObjectId(_id),
+          userId,
+        });
+
+        if (post) {
+          // Cancel the Agenda job if it exists
+          if (post.jobId) {
+            try {
+              const { cancelScheduledPost } = await import(
+                "../../../../workers/schedulePostWorker"
+              );
+              await cancelScheduledPost(post.jobId);
+              console.log(
+                `✅ Cancelled Agenda job ${post.jobId} for posted scheduled post`
+              );
+            } catch (err) {
+              console.error("Failed to cancel Agenda job:", err);
+              // Continue with deletion even if cancellation fails
+            }
+          }
+
+          // Delete from MongoDB
+          const deleteResult = await db.collection("scheduledPosts").deleteOne({
+            _id: new ObjectId(_id),
+            userId,
+          });
+          console.log(
+            `✅ Deleted scheduled post ${_id} after successful posting, deletedCount: ${deleteResult.deletedCount}`
+          );
+        } else {
+          console.log(
+            `⚠️ Scheduled post ${_id} not found for deletion (may have been already deleted)`
+          );
+        }
+      } catch (deleteErr) {
+        console.error(`❌ Error deleting scheduled post ${_id}:`, deleteErr);
+        // Don't fail the request if deletion fails - the post was successfully published
+      }
     }
 
     return NextResponse.json({

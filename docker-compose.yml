@@ -6,14 +6,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-      args:
-        NODE_ENV: production
-        MONGO_URI: ${MONGO_URI}
-        DATABASE_NAME: ${DATABASE_NAME}
-        JWT_SECRET: ${JWT_SECRET}
-        OPENAI_API_KEY: ${OPENAI_API_KEY}
-        JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-        ENC_SECRET: ${ENC_SECRET}
     env_file:
       - .env
     ports:
@@ -21,6 +13,11 @@ services:
     restart: unless-stopped
     networks:
       - sammy_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   sammy_network:
