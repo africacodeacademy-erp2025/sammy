@@ -631,11 +631,12 @@ generateWorkflow.addNode("checkGreeting", checkGreeting);
 generateWorkflow.addNode("extractScheduleTime", extractScheduleTime);
 generateWorkflow.addNode("generatePost", generatePost);
 generateWorkflow.addEdge(START, "checkGreeting" as any);
-generateWorkflow.addConditionalEdges("checkGreeting" as any, (s) =>
+generateWorkflow.addConditionalEdges("checkGreeting" as any, (s: GraphState) =>
   s.isGreeting ? "END" : "extractScheduleTime"
 );
-generateWorkflow.addConditionalEdges("extractScheduleTime" as any, (s) =>
-  s.scheduleTime ? "END" : "generatePost"
+generateWorkflow.addConditionalEdges(
+  "extractScheduleTime" as any,
+  (s: GraphState) => (s.scheduleTime ? "END" : "generatePost")
 );
 generateWorkflow.addEdge("generatePost" as any, END);
 const generateApp = generateWorkflow.compile();
@@ -657,7 +658,7 @@ const postWorkflow = new StateGraph<GraphState>({
 });
 postWorkflow.addNode("twitterPosting", twitterPosting as any);
 postWorkflow.addNode("facebookPosting", facebookPosting as any);
-postWorkflow.addConditionalEdges(START, (s) =>
+postWorkflow.addConditionalEdges(START, (s: GraphState) =>
   s.platform === "facebook" ? "facebookPosting" : "twitterPosting"
 );
 postWorkflow.addEdge("twitterPosting" as any, END);
@@ -727,31 +728,50 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (result.scheduleTime) {
+    if (result.scheduleTime && typeof result.scheduleTime === "string") {
+      // Generate the post content immediately before scheduling
+      const postResult = await generatePost({
+        prompt,
+        platform: platformResult.platform,
+        userId,
+      });
+
+      // Insert scheduled post with generated content
       const inserted = await db.collection("scheduledPosts").insertOne({
         userId,
         prompt,
         platform: platformResult.platform,
         scheduleTime: result.scheduleTime,
-        status: "scheduled",
+        status: "ready_for_review",
+        isScheduled: true,
+        post: postResult.post,
+        threadId: postResult.threadId,
         createdAt: new Date(),
+        updatedAt: new Date(),
       });
 
-      const { enqueueScheduledPost } = await import(
+      // Schedule with Agenda (MongoDB-based scheduler)
+      const { schedulePost } = await import(
         "../../../../workers/schedulePostWorker"
       );
-      await enqueueScheduledPost({
-        _id: inserted.insertedId.toString(),
-        userId,
-        prompt,
-        platform: platformResult.platform,
-        scheduleTime: result.scheduleTime,
-      });
+
+      const scheduleDate = new Date(result.scheduleTime);
+      const jobId = await schedulePost(
+        inserted.insertedId.toString(),
+        scheduleDate
+      );
+
+      // Store job ID in MongoDB for tracking and cancellation
+      await db
+        .collection("scheduledPosts")
+        .updateOne({ _id: inserted.insertedId }, { $set: { jobId } });
 
       return NextResponse.json({
         success: true,
         scheduled: true,
         message: `Post scheduled for ${result.scheduleTime}`,
+        post: postResult.post,
+        threadId: postResult.threadId,
       });
     }
 

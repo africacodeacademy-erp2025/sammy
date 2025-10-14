@@ -7,6 +7,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
+    "worker": "tsx workers/schedulePostWorker.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run worker\"",
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch"
@@ -14,11 +16,11 @@
   "dependencies": {
     "@langchain/langgraph": "^0.4.9",
     "@slack/web-api": "^7.10.0",
+    "agenda": "^5.0.0",
     "bcryptjs": "^3.0.2",
-    "bullmq": "^5.58.5",
+    "concurrently": "^9.2.1",
     "dotenv": "^17.2.2",
     "framer-motion": "^12.23.12",
-    "ioredis": "^5.7.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.544.0",
     "mongodb": "^6.19.0",
@@ -55,5 +57,10 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
+  },
+  "overrides": {
+    "agenda": {
+      "mongodb": "^6.19.0"
+    }
   }
 }
