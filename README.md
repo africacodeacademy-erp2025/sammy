@@ -19,9 +19,138 @@
    - LLM extracts and normalizes time to ISO 8601 UTC
    - Example: `2025-10-09T14:00:00Z`
 
-2. **Job Enqueueing** (BullMQ)
-   - Creates delayed Redis job scheduled for extracted time
-   - Sa## 🤝 Contributing
+2. **Job Enqueueing** (Agenda + MongoDB)
+
+   - Creates scheduled job stored in MongoDB
+   - Background worker processes at scheduled time
+
+3. **Background Processing** (Worker)
+
+   - Worker polls Agenda queue continuously
+   - At scheduled time, job executes:
+     - Performs vector search on user's past posts
+     - Generates content using OpenAI with context
+     - Updates database: `status = "ready_for_review"`
+     - Stores generated `post` and `threadId`
+
+4. **User Review**
+   - User sees post in "Ready for Review" section
+   - Approves or rejects draft
+   - On approval: publishes to platform via LangGraph posting workflow
+
+### 🔄 Recurring Scheduling System
+
+**SaMMy supports automated recurring post schedules** - create posts that automatically generate and queue at regular intervals without manual intervention.
+
+#### How Recurring Scheduling Works
+
+**User Interaction:**
+
+1. User creates a post with a specific prompt (e.g., "Share a productivity tip")
+2. Opens the **Recurrence Modal** from the agent interface
+3. Selects recurrence pattern:
+   - **Daily**: Every day or specific days of the week (Mon, Tue, Wed, etc.)
+   - **Weekly**: Every 7 days from creation
+   - **Monthly**: Specific months of the year (Jan, Feb, Mar, etc.)
+4. Sets the time (e.g., "09:00" in 24-hour format)
+5. Confirms - system stores recurring schedule
+
+**Backend Processing:**
+
+1. **Storage** (`recurringPosts` collection in MongoDB)
+
+   ```typescript
+   {
+     _id: ObjectId,
+     userId: string,
+     platform: "twitter" | "facebook",
+     prompt: string,
+     frequency: "daily" | "weekly" | "monthly",
+     time: string, // "HH:mm" format
+     selectedDays?: number[], // [0-6] for daily (0=Sun, 6=Sat)
+     selectedMonths?: number[], // [1-12] for monthly
+     nextOccurrence: Date, // When next post should be created
+     isActive: boolean,
+     createdAt: Date,
+     updatedAt: Date
+   }
+   ```
+
+2. **Background Worker** (`schedulePostWorker.ts`)
+
+   - Runs `check-recurring-posts` job **every minute** via Agenda
+   - Queries all active recurring posts where `nextOccurrence <= now`
+   - For each due post:
+     - Creates a new `scheduledPosts` document with status "ready_for_review"
+     - Generates AI content using the stored prompt
+     - Calculates and updates `nextOccurrence` to next interval
+     - Logs processing for monitoring
+
+3. **Automatic Next Occurrence Calculation**
+
+   - **Daily**: Advances to next selected day of week (or next day if all days selected)
+   - **Weekly**: Adds 7 days from previous occurrence
+   - **Monthly**: Advances to next selected month at specified time
+
+4. **User Management** (RecurringPostsView Component)
+   - View all recurring schedules
+   - Pause/Resume individual schedules (toggles `isActive`)
+   - Edit prompt or recurrence settings
+   - Delete recurring schedules
+   - Real-time status display with next occurrence timestamp
+
+#### Recurring Schedule Examples
+
+```
+✅ "Post daily motivational quote at 8am"
+   → Frequency: daily, Time: 08:00, Days: All
+
+✅ "Weekly newsletter on Mondays at 10am"
+   → Frequency: daily, Time: 10:00, Days: [1] (Monday only)
+
+✅ "Monthly product update on the 1st at 3pm"
+   → Frequency: monthly, Time: 15:00, Months: All
+
+✅ "Holiday greetings in Dec at 9am"
+   → Frequency: monthly, Time: 09:00, Months: [12] (December only)
+```
+
+#### Worker Architecture
+
+The recurring posts system uses **Agenda** (job scheduling library) with MongoDB persistence:
+
+```typescript
+// Every minute check
+agenda.every("1 minute", "check-recurring-posts");
+
+// Job lifecycle
+agenda.on("success", async (job) => {
+  // Preserve recurring jobs, remove one-time jobs
+  if (!job.attrs.repeatInterval) {
+    await job.remove(); // Clean up one-time scheduled posts
+  }
+});
+```
+
+**Key Features:**
+
+- ✅ **Persistent scheduling**: Survives server restarts (MongoDB-backed)
+- ✅ **Minute-level precision**: Checks every 60 seconds
+- ✅ **Auto-cleanup**: Removes old one-time jobs, preserves recurring jobs
+- ✅ **Graceful shutdown**: Properly stops Agenda on process termination
+- ✅ **Timezone-aware**: All times stored and calculated in UTC
+- ✅ **Smart recalculation**: Handles past-due posts by advancing to next valid occurrence
+
+#### Natural Language Examples
+
+```
+✅ "Post this on Twitter tomorrow at 9am"
+✅ "Schedule a Facebook post for next Monday 3pm UTC"
+✅ "Create a tweet about AI in 2 hours"
+✅ "Post to Facebook on Oct 15 at 10:30 UTC"
+```
+
+## 🤝 Contributing
 
 We welcome contributions! Please follow these guidelines:
 
@@ -244,13 +373,17 @@ cp .env.example .env
    SMTP_PASS=your_16_character_app_password
    ```
 
-### 4. Start Development
+### 3. Start Development
 
 ```bash
-# Start Next.js server
+# Start Next.js server and background worker together
+npm run dev:all
+
+# Or run them separately:
+# Terminal 1: Start Next.js server
 npm run dev
 
-# In a separate terminal, start the background worker
+# Terminal 2: Start the background worker (for scheduled & recurring posts)
 npx tsx workers/schedulePostWorker.ts
 ```
 
@@ -304,6 +437,7 @@ Check your email for the password reset link. The system will also log fallback 
   - Environment-aware email configuration
 
 **Email Integration:**
+
 - **Gmail SMTP** - Reliable email delivery using Gmail's SMTP service
 - **Professional Templates** - Branded email templates with modern design
 - **Dynamic URLs** - Automatically detects deployment environment (localhost, production, etc.)
@@ -345,10 +479,10 @@ Check your email for the password reset link. The system will also log fallback 
 | **Authentication**   | JWT tokens, bcrypt password hashing                                         |
 | **Security**         | AES-256-GCM encryption for OAuth tokens and credentials                     |
 | **OAuth 2.0**        | Twitter API v2 (with PKCE), Facebook Graph API v21.0, Slack Web API         |
-| **Background Jobs**  | BullMQ + Redis (scheduled post processing)                                  |
+| **Background Jobs**  | Agenda 5.0.0 + MongoDB (scheduled & recurring post processing)              |
 | **API Integrations** | Twitter API v2, Facebook Graph API, Slack Web API (OAuth 2.0)               |
 | **Testing**          | Jest, @testing-library/react                                                |
-| **Dev Tools**        | Turbopack, ESLint, TypeScript strict mode                                   |
+| **Dev Tools**        | Turbopack, ESLint, TypeScript strict mode, concurrently                     |
 
 ## 🏗️ Architecture Overview
 
@@ -479,6 +613,14 @@ extractScheduleTime → [if scheduled] → END
 | GET | `/api/pulling/x-pulling` | Pull & embed recent tweets |
 | GET | `/api/pulling/fb-pulling` | Pull & embed recent Facebook posts |
 
+### Recurring Posts Management
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/recurring-posts` | Create new recurring schedule |
+| GET | `/api/recurring-posts` | List user's recurring schedules |
+| PUT | `/api/recurring-posts` | Update recurring schedule (prompt, time, frequency, pause/resume) |
+| DELETE | `/api/recurring-posts?id=<id>` | Delete recurring schedule |
+
 ### Context Sources
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -583,12 +725,6 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # ============================================
-# Background Jobs (BullMQ + Redis)
-# ============================================
-REDIS_URL=rediss://default:password@hostname:port
-# For local Redis without TLS: redis://localhost:6379
-
-# ============================================
 # Twitter OAuth 2.0
 # ============================================
 TWITTER_CLIENT_ID=your_twitter_oauth2_client_id
@@ -626,18 +762,13 @@ SMTP_PASS=your_gmail_app_password
   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   ```
 
-- **REDIS_URL**:
-
-  - Use `rediss://` for TLS-enabled Redis (recommended for production)
-  - Use `redis://` for local development without TLS
-  - Worker code requires Redis for BullMQ job queue
-
 - **OAuth Redirect URIs**:
 
   - Development: `http://localhost:3000/api/integrations/{platform}/callback`
   - Production: Update with your production domain
 
 - **Gmail SMTP Configuration**:
+
   - **SMTP_USER**: Your Gmail address
   - **SMTP_PASS**: Gmail App Password (not your regular password)
   - Generate App Password: [Google Account Settings](https://support.google.com/accounts/answer/185833) → Security → 2-Step Verification → App passwords
@@ -745,6 +876,7 @@ curl -X POST http://localhost:3000/api/auth/signin \
 ### 3. Password Reset Flow
 
 **Request Password Reset:**
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/forgot-password \
   -H "Content-Type: application/json" \
@@ -754,6 +886,7 @@ curl -X POST http://localhost:3000/api/auth/forgot-password \
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -762,6 +895,7 @@ curl -X POST http://localhost:3000/api/auth/forgot-password \
 ```
 
 **Reset Password with Token:**
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/reset-password \
   -H "Content-Type: application/json" \
@@ -774,6 +908,7 @@ curl -X POST http://localhost:3000/api/auth/reset-password \
 ### 4. Profile Management (Authenticated)
 
 **Change Password:**
+
 ```bash
 curl -X PUT http://localhost:3000/api/auth/change-password \
   -H "Content-Type: application/json" \
@@ -785,6 +920,7 @@ curl -X PUT http://localhost:3000/api/auth/change-password \
 ```
 
 **Update Email:**
+
 ```bash
 curl -X PUT http://localhost:3000/api/auth/update-email \
   -H "Content-Type: application/json" \
@@ -950,7 +1086,7 @@ curl -X GET "http://localhost:3000/api/sources/slack" \
 
 **Response:**
 
-````json
+```json
 {
   "success": true,
   "posts": [
@@ -965,18 +1101,245 @@ curl -X GET "http://localhost:3000/api/sources/slack" \
     }
   ]
 }
-```id, userId, platform: "twitter" | "facebook", message, embedding: number[]
-}
+```
 
-// collection: scheduledPosts
+### 7. Create Recurring Schedule
+
+```bash
+curl -X POST http://localhost:3000/api/recurring-posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "platform": "twitter",
+    "prompt": "Share a daily productivity tip",
+    "frequency": "daily",
+    "time": "09:00",
+    "selectedDays": [1, 2, 3, 4, 5]
+  }'
+```
+
+**Response:**
+
+```json
 {
-  _id, userId, prompt, platform, scheduleTime,
-  status: "scheduled" | "ready_for_review" | "posted",
-  post?, threadId?, isScheduled?, createdAt, updatedAt
+  "success": true,
+  "recurringPost": {
+    "_id": "671234567890abcdef123456",
+    "userId": "507f1f77bcf86cd799439011",
+    "platform": "twitter",
+    "prompt": "Share a daily productivity tip",
+    "frequency": "daily",
+    "time": "09:00",
+    "selectedDays": [1, 2, 3, 4, 5],
+    "nextOccurrence": "2025-10-16T09:00:00.000Z",
+    "isActive": true,
+    "createdAt": "2025-10-15T10:30:00.000Z"
+  }
 }
-````
+```
 
-## Scheduling Flow
+### 8. List Recurring Schedules
+
+```bash
+curl -X GET http://localhost:3000/api/recurring-posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "recurringPosts": [
+    {
+      "_id": "671234567890abcdef123456",
+      "platform": "twitter",
+      "prompt": "Share a daily productivity tip",
+      "frequency": "daily",
+      "time": "09:00",
+      "selectedDays": [1, 2, 3, 4, 5],
+      "nextOccurrence": "2025-10-16T09:00:00.000Z",
+      "isActive": true,
+      "createdAt": "2025-10-15T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+### 9. Update Recurring Schedule
+
+```bash
+# Pause/Resume
+curl -X PUT http://localhost:3000/api/recurring-posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "671234567890abcdef123456",
+    "isActive": false
+  }'
+
+# Update time and frequency
+curl -X PUT http://localhost:3000/api/recurring-posts \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "671234567890abcdef123456",
+    "frequency": "weekly",
+    "time": "14:00"
+  }'
+```
+
+### 10. Delete Recurring Schedule
+
+```bash
+curl -X DELETE "http://localhost:3000/api/recurring-posts?id=671234567890abcdef123456" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## Database Schema
+
+### MongoDB Collections
+
+#### `users`
+
+```typescript
+{
+  _id: ObjectId,
+  email: string,
+  password: string, // bcrypt hashed
+  resetToken?: string,
+  resetTokenExpiry?: Date,
+  twitter?: {
+    accessToken?: string, // Encrypted
+    refreshToken?: string, // Encrypted
+    userId?: string
+  },
+  facebook?: {
+    accessToken?: string, // Encrypted
+    userId?: string,
+    pages?: [
+      {
+        id: string,
+        name: string,
+        accessToken: string // Encrypted
+      }
+    ]
+  },
+  slack?: {
+    accessToken?: string, // Bot token (encrypted)
+    userAccessToken?: string, // User token (encrypted)
+    teamId?: string,
+    teamName?: string,
+    userId?: string
+  },
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+#### `past_posts`
+
+```typescript
+{
+  _id: ObjectId,
+  userId: string,
+  postId: string, // Platform's post ID
+  message: string, // Post content
+  embedding: number[], // 1536-dim vector (OpenAI text-embedding-3-small)
+  platform: "twitter" | "facebook",
+  createdAt: Date
+}
+```
+
+#### `messages` (Slack)
+
+```typescript
+{
+  _id: ObjectId,
+  userId: string,
+  channel: string, // Slack channel name
+  user: string, // Slack user ID
+  text: string, // Message content
+  ts: string, // Slack timestamp
+  embedding: number[], // 1536-dim vector
+  createdAt: Date
+}
+```
+
+#### `scheduledPosts`
+
+```typescript
+{
+  _id: ObjectId,
+  userId: string,
+  prompt: string,
+  platform: "twitter" | "facebook",
+  scheduleTime: Date,
+  status: "scheduled" | "ready_for_review" | "posted" | "failed",
+  post?: string, // Generated content
+  threadId?: string, // LangGraph thread ID
+  isScheduled?: boolean,
+  failureReason?: string,
+  processedAt?: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+#### `recurringPosts`
+
+```typescript
+{
+  _id: ObjectId,
+  userId: string,
+  platform: "twitter" | "facebook",
+  prompt: string, // Template prompt for content generation
+  frequency: "daily" | "weekly" | "monthly",
+  time: string, // "HH:mm" format (24-hour)
+  selectedDays?: number[], // For daily: [0-6] (0=Sun, 6=Sat)
+  selectedMonths?: number[], // For monthly: [1-12] (1=Jan, 12=Dec)
+  nextOccurrence: Date, // When next post should be created
+  isActive: boolean, // Pause/resume control
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+#### `agendaJobs` (Managed by Agenda)
+
+```typescript
+{
+  _id: ObjectId,
+  name: string, // "process-scheduled-post", "check-recurring-posts", "cleanup-old-jobs"
+  type: "normal" | "single",
+  data: object, // Job-specific data
+  priority: number,
+  nextRunAt: Date,
+  lastRunAt?: Date,
+  lastFinishedAt?: Date,
+  repeatInterval?: string, // "1 minute" for recurring jobs
+  lockedAt?: Date,
+  failCount: number,
+  failReason?: string
+}
+```
+
+### Vector Search Indexes
+
+**Required for semantic content matching:**
+
+1. **past_posts collection**
+
+   - Index Name: `vector_index`
+   - Field: `embedding`
+   - Dimensions: 1536
+   - Similarity: cosine
+
+2. **messages collection**
+   - Index Name: `vector_index`
+   - Field: `embedding`
+   - Dimensions: 1536
+   - Similarity: cosine
 
 ## 🧪 Testing
 

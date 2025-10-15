@@ -4,13 +4,12 @@ import Image from "next/image";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import MessageBubble from "../Components/MessageBubble";
 import { Message } from "../Types";
-import type { RecurrencePattern } from "../Types/recurring";
 import CredentialsSidebar from "./CredentialsSidebar";
 import ProfileSidebar from "./ProfileSidebar";
-import RecurringScheduleModal from "./RecurringScheduleModal";
 import ScheduledPostView from "./ScheduledPostsView";
 import Sidebar from "./Sidebar";
 import ProfileMenu from "./UI/ProfileMenu";
+import RecurrenceModal, { RecurrenceSettings } from "./RecurrenceModal";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -24,11 +23,17 @@ export default function ChatBot() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "schedule">("chat");
   const [hasRequiredCredentials, setHasRequiredCredentials] = useState(false);
-  const [recurringModalOpen, setRecurringModalOpen] = useState(false);
-  const [recurringPattern, setRecurringPattern] =
-    useState<RecurrencePattern | null>(null);
-  const [recurringPrompt, setRecurringPrompt] = useState("");
-  const [recurringPlatform, setRecurringPlatform] = useState("");
+
+  // Recurrence Modal State
+  const [recurrenceModalOpen, setRecurrenceModalOpen] = useState(false);
+  const [recurrenceData, setRecurrenceData] = useState<{
+    frequency: "daily" | "weekly" | "monthly";
+    time: string;
+    timestamp: string;
+    platform: string;
+    prompt: string;
+    detectedDays?: number[];
+  } | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -109,49 +114,6 @@ export default function ChatBot() {
     []
   );
 
-  const handleConfirmRecurring = async (pattern: RecurrencePattern) => {
-    try {
-      const token = localStorage.getItem("token");
-
-      const res = await fetch("/api/recurring-schedules/confirm", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          pattern,
-          platform: recurringPlatform,
-          prompt: recurringPrompt,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to create recurring schedule");
-      }
-
-      addMessage({
-        sender: "ai",
-        content: data.message || "Recurring schedule created successfully!",
-        status: "scheduled",
-      });
-
-      setRecurringModalOpen(false);
-    } catch (error) {
-      console.error("Error confirming recurring schedule:", error);
-      addMessage({
-        sender: "ai",
-        content:
-          error instanceof Error
-            ? error.message
-            : "Failed to create recurring schedule. Please try again.",
-        status: "error",
-      });
-    }
-  };
-
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userInput = input.trim();
@@ -191,26 +153,13 @@ export default function ChatBot() {
           content: data.message,
           // No status for greetings - they don't need action buttons
         });
-      } else if (data.recurring && data.needsConfirmation) {
-        // Recurring schedule detected - show modal for confirmation
-        setRecurringPattern(data.pattern);
-        setRecurringPrompt(userInput);
-        setRecurringPlatform(data.pattern.platform);
-        setRecurringModalOpen(true);
+      } else if (data.recurrence) {
+        // Handle recurrence - show modal with converted time
+        setRecurrenceData(data.recurrenceData);
+        setRecurrenceModalOpen(true);
         addMessage({
           sender: "ai",
-          content:
-            data.message ||
-            "I detected a recurring schedule! Let me set that up for you...",
-        });
-      } else if (data.needsClarification) {
-        // Low-confidence recurring - ask for clarification
-        const suggestions = data.suggestions
-          ? "\n\nSuggestions:\n" + data.suggestions.join("\n")
-          : "";
-        addMessage({
-          sender: "ai",
-          content: (data.message || "Could you clarify?") + suggestions,
+          content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
         });
       } else if (data.scheduled) {
         addMessage({
@@ -353,6 +302,68 @@ export default function ChatBot() {
     updateMessageStatus(id, "rejected");
   };
 
+  const handleRecurrenceConfirm = async (settings: RecurrenceSettings) => {
+    setRecurrenceModalOpen(false);
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      // Send recurrence settings to backend API endpoint
+      const res = await fetch("/api/recurring-posts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(settings),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        addMessage({
+          sender: "ai",
+          content:
+            data.error ||
+            `Failed to create recurring schedule: ${res.statusText}`,
+          status: "error",
+        });
+        return;
+      }
+
+      // Use the formatted message from the backend
+      addMessage({
+        sender: "ai",
+        content: data.message,
+        status: "scheduled",
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to create recurring schedule.";
+      addMessage({
+        sender: "ai",
+        content: message,
+        status: "error",
+      });
+    } finally {
+      setLoading(false);
+      setRecurrenceData(null);
+    }
+  };
+
+  const handleRecurrenceCancel = () => {
+    setRecurrenceModalOpen(false);
+    setRecurrenceData(null);
+    addMessage({
+      sender: "ai",
+      content:
+        "Recurring schedule setup canceled. Feel free to ask me anything else! 😊",
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -434,6 +445,20 @@ export default function ChatBot() {
         isOpen={profileSidebarOpen}
         onClose={() => setProfileSidebarOpen(false)}
       />
+
+      {/* Recurrence Modal */}
+      {recurrenceData && (
+        <RecurrenceModal
+          isOpen={recurrenceModalOpen}
+          onClose={handleRecurrenceCancel}
+          onConfirm={handleRecurrenceConfirm}
+          frequency={recurrenceData.frequency}
+          time={recurrenceData.time}
+          platform={recurrenceData.platform}
+          prompt={recurrenceData.prompt}
+          detectedDays={recurrenceData.detectedDays}
+        />
+      )}
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative transition-all duration-300">
@@ -597,16 +622,6 @@ export default function ChatBot() {
           </div>
         </div>
       </div>
-
-      {/* Recurring Schedule Modal */}
-      <RecurringScheduleModal
-        isOpen={recurringModalOpen}
-        onClose={() => setRecurringModalOpen(false)}
-        onConfirm={handleConfirmRecurring}
-        initialPattern={recurringPattern || undefined}
-        prompt={recurringPrompt}
-        platform={recurringPlatform}
-      />
     </div>
   );
 }

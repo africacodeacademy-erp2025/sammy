@@ -1,8 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import MessageBubble from "../Components/MessageBubble";
-import RecurringScheduleManager from "../Components/RecurringScheduleManager";
-import type { RecurringScheduleTemplate } from "../Types/recurring";
 
 export interface ScheduledPost {
   threadId: string | null;
@@ -13,8 +11,6 @@ export interface ScheduledPost {
   scheduleTime: string;
   status: "scheduled" | "ready_for_review" | string;
   isScheduled?: boolean;
-  parentPostId?: string; // Links to recurring template
-  isRecurringOccurrence?: boolean;
 }
 
 interface CalendarDay {
@@ -40,12 +36,8 @@ export default function ScheduledPostView({
   const [readyForReviewPosts, setReadyForReviewPosts] = useState<
     ScheduledPost[]
   >([]);
-  const [recurringTemplates, setRecurringTemplates] = useState<
-    RecurringScheduleTemplate[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [showReadyPosts, setShowReadyPosts] = useState(false);
-  const [showRecurringManager, setShowRecurringManager] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
 
   const token = localStorage.getItem("token");
@@ -61,17 +53,6 @@ export default function ScheduledPostView({
       const data = await res.json();
       setScheduledPosts(data.scheduled || initialPosts);
       setReadyForReviewPosts(data.readyForReview || []);
-
-      // Fetch recurring templates
-      const recurringRes = await fetch("/api/recurring-schedules", {
-        headers: {
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-      });
-      const recurringData = await recurringRes.json();
-      if (recurringData.success) {
-        setRecurringTemplates(recurringData.templates || []);
-      }
     } catch (err) {
       console.error("Failed to fetch scheduled posts", err);
     } finally {
@@ -167,84 +148,6 @@ export default function ScheduledPostView({
     );
   };
 
-  // Helper function to calculate next occurrences for a recurring template
-  const calculateRecurringOccurrences = (
-    template: RecurringScheduleTemplate,
-    startDate: Date,
-    endDate: Date
-  ): ScheduledPost[] => {
-    if (!template.recurrencePattern || template.status !== "active") return [];
-
-    const occurrences: ScheduledPost[] = [];
-    const pattern = template.recurrencePattern;
-    const [hours, minutes] = pattern.timeOfDay.split(":").map(Number);
-
-    let currentDate = new Date(startDate);
-    currentDate.setHours(hours, minutes, 0, 0);
-
-    // If the time has passed for startDate, move to next day
-    if (currentDate < new Date()) {
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    const maxIterations = 100; // Safety limit
-    let iterations = 0;
-
-    while (currentDate <= endDate && iterations < maxIterations) {
-      iterations++;
-      let shouldAdd = false;
-
-      if (pattern.frequency === "daily") {
-        shouldAdd = true;
-        currentDate.setDate(currentDate.getDate() + pattern.interval);
-      } else if (pattern.frequency === "weekly") {
-        const dayOfWeek = currentDate.toLocaleDateString("en-US", {
-          weekday: "long",
-        });
-        if (
-          pattern.daysOfWeek &&
-          pattern.daysOfWeek.includes(
-            dayOfWeek as
-              | "Sunday"
-              | "Monday"
-              | "Tuesday"
-              | "Wednesday"
-              | "Thursday"
-              | "Friday"
-              | "Saturday"
-          )
-        ) {
-          shouldAdd = true;
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-      } else if (pattern.frequency === "monthly") {
-        if (
-          pattern.dayOfMonth &&
-          currentDate.getDate() === pattern.dayOfMonth
-        ) {
-          shouldAdd = true;
-        }
-        currentDate.setMonth(currentDate.getMonth() + pattern.interval);
-      }
-
-      if (shouldAdd && currentDate <= endDate && currentDate >= startDate) {
-        occurrences.push({
-          _id: `recurring-${template._id}-${currentDate.getTime()}`,
-          threadId: null,
-          prompt: template.prompt,
-          platform: template.platform,
-          scheduleTime: currentDate.toISOString(),
-          status: "scheduled",
-          isScheduled: true,
-          parentPostId: template._id,
-          isRecurringOccurrence: true,
-        });
-      }
-    }
-
-    return occurrences;
-  };
-
   const miniCalendarDays = useMemo((): CalendarDay[] => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -256,20 +159,6 @@ export default function ScheduledPostView({
     const endDate = new Date(
       lastDay.getTime() + (6 - lastDay.getDay()) * 24 * 60 * 60 * 1000
     );
-
-    // Calculate recurring occurrences for the visible calendar range
-    const recurringOccurrences: ScheduledPost[] = [];
-    recurringTemplates.forEach((template) => {
-      const occurrences = calculateRecurringOccurrences(
-        template,
-        startDate,
-        endDate
-      );
-      recurringOccurrences.push(...occurrences);
-    });
-
-    // Merge scheduled posts with recurring occurrences
-    const allPosts = [...scheduledPosts, ...recurringOccurrences];
 
     const days: CalendarDay[] = [];
     const today = new Date().toDateString();
@@ -283,40 +172,21 @@ export default function ScheduledPostView({
         date: new Date(d),
         isCurrentMonth: d.getMonth() === month,
         isToday: dateString === today,
-        posts: allPosts.filter(
+        posts: scheduledPosts.filter(
           (post) => new Date(post.scheduleTime).toDateString() === dateString
         ),
       });
     }
     return days;
-  }, [currentDate, scheduledPosts, recurringTemplates]);
+  }, [currentDate, scheduledPosts]);
 
   const selectedDatePosts = useMemo(() => {
-    // Calculate recurring occurrences for the selected date
-    const selectedDateStart = new Date(selectedDate);
-    selectedDateStart.setHours(0, 0, 0, 0);
-    const selectedDateEnd = new Date(selectedDate);
-    selectedDateEnd.setHours(23, 59, 59, 999);
-
-    const recurringOccurrences: ScheduledPost[] = [];
-    recurringTemplates.forEach((template) => {
-      const occurrences = calculateRecurringOccurrences(
-        template,
-        selectedDateStart,
-        selectedDateEnd
-      );
-      recurringOccurrences.push(...occurrences);
-    });
-
-    // Merge scheduled posts with recurring occurrences
-    const allPosts = [...scheduledPosts, ...recurringOccurrences];
-
-    return allPosts.filter(
+    return scheduledPosts.filter(
       (post) =>
         new Date(post.scheduleTime).toDateString() ===
         selectedDate.toDateString()
     );
-  }, [selectedDate, scheduledPosts, recurringTemplates]);
+  }, [selectedDate, scheduledPosts]);
 
   const monthNames = [
     "January",
@@ -348,18 +218,6 @@ export default function ScheduledPostView({
     );
   }
 
-  // Show Recurring Manager if requested
-  if (showRecurringManager) {
-    return (
-      <RecurringScheduleManager
-        onClose={() => {
-          setShowRecurringManager(false);
-          fetchPosts(); // Refresh data when returning
-        }}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col md:flex-row h-screen w-full bg-gray-950">
       {/* Sidebar Calendar */}
@@ -384,20 +242,6 @@ export default function ScheduledPostView({
         {/* Mini Calendar */}
         <div className="p-4 flex-1 overflow-y-auto">
           {/* Legend */}
-          <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700/30">
-            <p className="text-xs text-gray-400 mb-2 font-medium">Legend:</p>
-            <div className="flex flex-col gap-1 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                <span className="text-gray-300">One-time post</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                <span className="text-gray-300">Recurring post</span>
-              </div>
-            </div>
-          </div>
-
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-white font-medium text-sm md:text-base">
@@ -452,18 +296,10 @@ export default function ScheduledPostView({
                   {day.date.getDate()}
                   {day.posts.length > 0 && (
                     <div className="absolute bottom-0.5 left-0 right-0 flex justify-center gap-0.5">
-                      {day.posts.some((p) => p.isRecurringOccurrence) && (
-                        <div
-                          className="w-1.5 h-1.5 bg-green-400 rounded-full"
-                          title="Recurring post"
-                        ></div>
-                      )}
-                      {day.posts.some((p) => !p.isRecurringOccurrence) && (
-                        <div
-                          className="w-1.5 h-1.5 bg-blue-400 rounded-full"
-                          title="One-time post"
-                        ></div>
-                      )}
+                      <div
+                        className="w-1.5 h-1.5 bg-blue-400 rounded-full"
+                        title="Scheduled post"
+                      ></div>
                     </div>
                   )}
                 </button>
@@ -480,18 +316,11 @@ export default function ScheduledPostView({
           >
             {showReadyPosts ? "Hide Ready for Review" : "Show Ready for Review"}
           </button>
-
-          {/* Recurring Schedules Button */}
           <button
-            onClick={() => setShowRecurringManager(true)}
-            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all flex items-center justify-center gap-2"
+            onClick={() => (window.location.href = "/manage-recurring")}
+            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold hover:from-green-600 hover:to-teal-600 transition-all"
           >
-            🔄 Recurring Schedules
-            {recurringTemplates.length > 0 && (
-              <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">
-                {recurringTemplates.length}
-              </span>
-            )}
+            🔄 Manage Recurring Posts
           </button>
         </div>
       </div>
@@ -575,11 +404,6 @@ export default function ScheduledPostView({
                         Scheduled for {formatTime(post.scheduleTime)}
                       </div>
                       <div className="flex items-center gap-2">
-                        {post.isRecurringOccurrence && (
-                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1">
-                            🔄 Recurring
-                          </span>
-                        )}
                         <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
                           {post.status === "scheduled"
                             ? "⏰ Pending"

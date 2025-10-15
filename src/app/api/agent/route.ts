@@ -236,6 +236,94 @@ Platform-specific guidelines for Facebook:
   return "";
 }
 
+function detectRecurrence(prompt: string): {
+  hasRecurrence: boolean;
+  frequency: "daily" | "weekly" | "monthly" | null;
+} {
+  const normalized = prompt.toLowerCase().trim();
+
+  // Days of the week - if mentioned with "every", it's daily recurrence (specific days)
+  const daysOfWeek = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "mon",
+    "tue",
+    "wed",
+    "thu",
+    "fri",
+    "sat",
+    "sun",
+  ];
+
+  // Check for specific day patterns (e.g., "every wednesday", "every monday")
+  // These are treated as DAILY with specific day selection
+  for (const day of daysOfWeek) {
+    if (
+      new RegExp(`\\b(every|each)\\s+${day}\\b`, "i").test(normalized) ||
+      (new RegExp(`\\b${day}s?\\b`, "i").test(normalized) &&
+        /\b(every|each)\b/i.test(normalized))
+    ) {
+      return { hasRecurrence: true, frequency: "daily" };
+    }
+  }
+
+  // Check for daily patterns
+  if (/\b(daily|every day|each day|everyday)\b/i.test(normalized)) {
+    return { hasRecurrence: true, frequency: "daily" };
+  }
+
+  // Check for weekly patterns (general - means once a week, no specific day)
+  if (/\b(weekly|every week|each week)\b/i.test(normalized)) {
+    return { hasRecurrence: true, frequency: "weekly" };
+  }
+
+  // Check for monthly patterns
+  if (/\b(monthly|every month|each month)\b/i.test(normalized)) {
+    return { hasRecurrence: true, frequency: "monthly" };
+  }
+
+  return { hasRecurrence: false, frequency: null };
+}
+
+function detectSpecificDays(prompt: string): number[] {
+  const normalized = prompt.toLowerCase().trim();
+  const detectedDays: number[] = [];
+
+  // Map day names to day numbers (0 = Sunday, 1 = Monday, etc.)
+  const dayMap: { [key: string]: number } = {
+    sunday: 0,
+    sun: 0,
+    monday: 1,
+    mon: 1,
+    tuesday: 2,
+    tue: 2,
+    wednesday: 3,
+    wed: 3,
+    thursday: 4,
+    thu: 4,
+    friday: 5,
+    fri: 5,
+    saturday: 6,
+    sat: 6,
+  };
+
+  // Check for each day in the prompt
+  for (const [dayName, dayNumber] of Object.entries(dayMap)) {
+    if (new RegExp(`\\b${dayName}\\b`, "i").test(normalized)) {
+      if (!detectedDays.includes(dayNumber)) {
+        detectedDays.push(dayNumber);
+      }
+    }
+  }
+
+  return detectedDays.sort();
+}
+
 function detectGreeting(prompt: string): boolean {
   const normalized = prompt.toLowerCase().trim();
   const greetingPatterns = [
@@ -341,6 +429,76 @@ async function checkGreeting(state: GraphState): Promise<Partial<GraphState>> {
   return state;
 }
 
+async function extractRecurrenceTime(
+  state: GraphState
+): Promise<Partial<GraphState>> {
+  const { prompt } = state;
+  const now = new Date().toISOString();
+  const currentDate = new Date();
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: `You are a time extraction assistant for recurring scheduled posts.
+Current UTC datetime: ${now}
+Current local timezone: ${timezone}
+
+Your task is to extract the time from the user's prompt for recurring posts. Return a JSON object with:
+{
+  "time": "HH:mm" (24-hour format, e.g., "14:30" for 2:30 PM),
+  "timestamp": ISO 8601 timestamp (YYYY-MM-DDTHH:mm:ssZ) for the next occurrence
+}
+
+Time understanding patterns:
+- Specific times: "at 3pm" → "15:00", "at 9am" → "09:00", "at 2:30pm" → "14:30"
+- Period times: "morning" → "09:00", "afternoon" → "14:00", "evening" → "18:00", "night" → "21:00"
+- Contextual: "lunch time" → "12:00", "end of day" → "17:00"
+
+Rules:
+1. Extract time and convert to 24-hour format (HH:mm)
+2. Generate timestamp for the next occurrence of that time in UTC
+3. If no specific time is mentioned, default to "12:00" (noon)
+4. Always return both "time" and "timestamp" fields`,
+      },
+      { role: "user", content: prompt },
+    ],
+    max_tokens: 150,
+  });
+
+  try {
+    const parsed = JSON.parse(completion.choices[0].message?.content ?? "{}");
+    if (parsed.time && parsed.timestamp && isValidISODate(parsed.timestamp)) {
+      return {
+        scheduleTime: parsed.timestamp,
+        // Store the time separately for the recurrence modal
+        ...state,
+        result: {
+          ...state.result,
+          recurrenceTime: parsed.time,
+        },
+      };
+    }
+  } catch (error) {
+    console.error("Error parsing recurrence time:", error);
+  }
+
+  // Fallback to default noon time
+  const fallbackDate = new Date();
+  fallbackDate.setHours(12, 0, 0, 0);
+  return {
+    scheduleTime: fallbackDate.toISOString(),
+    ...state,
+    result: {
+      ...state.result,
+      recurrenceTime: "12:00",
+    },
+  };
+}
+
 async function extractScheduleTime(
   state: GraphState
 ): Promise<Partial<GraphState>> {
@@ -394,125 +552,6 @@ Be intelligent about context clues and implicit time references.`,
     }
   } catch {}
   return { scheduleTime };
-}
-
-/**
- * Detect and extract recurring schedule patterns from user prompt
- */
-async function detectRecurringPattern(
-  prompt: string
-): Promise<import("../../Types/recurring").RecurrenceDetectionResult> {
-  const now = new Date().toISOString();
-  const currentDate = new Date();
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: `You are an advanced recurring pattern detection assistant.
-Current UTC datetime: ${now}
-Current local timezone: ${timezone}
-Current day: ${currentDate.toLocaleDateString("en-US", { weekday: "long" })}
-
-Your task: Detect if the user wants a RECURRING schedule (posts that repeat automatically).
-
-Return JSON with this EXACT structure:
-{
-  "isRecurring": boolean,
-  "confidence": 0.0-1.0,
-  "pattern": {
-    "frequency": "daily" | "weekly" | "monthly" | "custom" | null,
-    "interval": number,
-    "daysOfWeek": ["Monday", "Friday"] or null,
-    "dayOfMonth": number or null,
-    "timeOfDay": "HH:mm" in 24-hour format,
-    "humanReadable": "Every Monday and Friday at 9:00 AM"
-  } or null,
-  "oneTimeSchedule": "YYYY-MM-DDTHH:mm:ssZ" or null,
-  "suggestions": ["example 1", "example 2"] or null
-}
-
-RECURRING PATTERNS TO DETECT:
-✅ "every day at 9am" → daily, confidence: 1.0
-✅ "daily at noon" → daily, confidence: 1.0
-✅ "every Monday" → weekly, daysOfWeek: ["Monday"]
-✅ "Mondays and Fridays at 2pm" → weekly, daysOfWeek: ["Monday", "Friday"]
-✅ "every weekday" → weekly, daysOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"]
-✅ "twice a week" → weekly (suggest specific days), confidence: 0.6
-✅ "every 2 days at 10am" → custom, interval: 2
-✅ "monthly on the 15th at noon" → monthly, dayOfMonth: 15
-✅ "on the 1st of every month" → monthly, dayOfMonth: 1
-
-NON-RECURRING (one-time):
-❌ "tomorrow at 3pm" → isRecurring: false, oneTimeSchedule: ISO date
-❌ "in 2 hours" → isRecurring: false, oneTimeSchedule: ISO date
-❌ "next Monday" → isRecurring: false, oneTimeSchedule: ISO date
-
-AMBIGUOUS (low confidence):
-⚠️ "post regularly" → confidence < 0.5, add suggestions
-⚠️ "a few times a week" → confidence < 0.5, add suggestions
-
-RULES:
-1. Set isRecurring: true ONLY if user wants REPEATING posts
-2. confidence > 0.8 = clear pattern
-3. confidence 0.5-0.8 = likely pattern, needs confirmation
-4. confidence < 0.5 = unclear, provide suggestions
-5. If one-time schedule detected, set isRecurring: false and provide oneTimeSchedule
-6. timeOfDay MUST be in HH:mm 24-hour format
-7. For weekly, daysOfWeek must be full names: "Monday", not "Mon"
-8. Generate helpful humanReadable description`,
-      },
-      { role: "user", content: prompt },
-    ],
-    max_tokens: 300,
-  });
-
-  try {
-    const result = JSON.parse(completion.choices[0].message?.content ?? "{}");
-
-    // Validate and sanitize the result
-    if (!result.isRecurring) {
-      return {
-        isRecurring: false,
-        confidence: result.confidence || 0,
-        pattern: null,
-        oneTimeSchedule: result.oneTimeSchedule || null,
-        suggestions: result.suggestions || null,
-      };
-    }
-
-    // Validate pattern if recurring
-    if (result.pattern) {
-      // Ensure timeOfDay is in correct format
-      if (!/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/.test(result.pattern.timeOfDay)) {
-        result.pattern.timeOfDay = "09:00"; // Default fallback
-      }
-
-      // Ensure interval is valid
-      if (!result.pattern.interval || result.pattern.interval < 1) {
-        result.pattern.interval = 1;
-      }
-    }
-
-    return {
-      isRecurring: true,
-      confidence: result.confidence || 0,
-      pattern: result.pattern,
-      oneTimeSchedule: null,
-      suggestions: result.suggestions || null,
-    };
-  } catch (error) {
-    console.error("Error parsing recurring pattern:", error);
-    return {
-      isRecurring: false,
-      confidence: 0,
-      pattern: null,
-      oneTimeSchedule: null,
-    };
-  }
 }
 
 export async function generatePost(
@@ -827,86 +866,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for recurring pattern BEFORE one-time scheduling
-    const recurringDetection = await detectRecurringPattern(prompt);
+    // Check for recurrence in the prompt
+    const recurrenceResult = detectRecurrence(prompt);
 
-    // Handle high-confidence recurring patterns
-    if (
-      recurringDetection.isRecurring &&
-      recurringDetection.confidence >= 0.7
-    ) {
-      if (!recurringDetection.pattern) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Could not parse recurring pattern. Please try rephrasing.",
-          },
-          { status: 400 }
-        );
-      }
+    // If recurrence is detected, extract the time and return data for RecurrenceModal
+    if (recurrenceResult.hasRecurrence && recurrenceResult.frequency) {
+      const timeResult = await extractRecurrenceTime({
+        prompt,
+        platform: platformResult.platform,
+        userId,
+      });
 
-      // Import utility functions
-      const {
-        validateRecurrencePattern,
-        calculateNextOccurrences,
-        formatOccurrenceDate,
-      } = await import("../../../../lib/recurringScheduleManager");
+      // Detect specific days mentioned in the prompt
+      const detectedDays = detectSpecificDays(prompt);
 
-      // Validate the pattern
-      const validation = validateRecurrencePattern(recurringDetection.pattern);
-      if (!validation.isValid) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: validation.error || "Invalid recurrence pattern",
-          },
-          { status: 400 }
-        );
-      }
-
-      // Calculate preview occurrences
-      const nextOccurrences = calculateNextOccurrences(
-        recurringDetection.pattern,
-        5
-      );
-
-      // Return confirmation response (user will need to confirm)
       return NextResponse.json({
         success: true,
-        recurring: true,
-        needsConfirmation: true,
-        pattern: {
-          ...recurringDetection.pattern,
+        recurrence: true,
+        recurrenceData: {
+          frequency: recurrenceResult.frequency,
+          time: timeResult.result?.recurrenceTime || "12:00",
+          timestamp: timeResult.scheduleTime,
           platform: platformResult.platform,
           prompt,
+          detectedDays: detectedDays.length > 0 ? detectedDays : undefined,
         },
-        preview: {
-          description: recurringDetection.pattern.humanReadable,
-          nextOccurrences: nextOccurrences.map((date: Date) => ({
-            date: date.toISOString(),
-            formatted: formatOccurrenceDate(date),
-          })),
-        },
-        message: `I'll set up a recurring schedule: ${recurringDetection.pattern.humanReadable}`,
-      });
-    }
-
-    // Handle low-confidence recurring patterns (provide suggestions)
-    if (
-      recurringDetection.isRecurring &&
-      recurringDetection.confidence > 0.3 &&
-      recurringDetection.confidence < 0.7
-    ) {
-      return NextResponse.json({
-        success: false,
-        needsClarification: true,
-        suggestions: recurringDetection.suggestions || [
-          "Try: 'Every day at 9am'",
-          "Try: 'Every Monday and Friday at 2pm'",
-          "Try: 'Monthly on the 15th at noon'",
-        ],
-        message:
-          "I think you want a recurring schedule, but I need more details. How often should I post?",
       });
     }
 
