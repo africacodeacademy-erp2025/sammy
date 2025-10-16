@@ -5,23 +5,37 @@ import { getUserFromRequest } from "../../../../lib/auth";
 
 /**
  * Calculate the next occurrence timestamp based on frequency and recurrence settings
+ * Converts local time to UTC using timezone offset
  */
 function calculateNextOccurrence(
   frequency: "daily" | "weekly" | "monthly",
-  time: string, // HH:mm format
+  time: string, // HH:mm format in LOCAL TIME
   selectedDays?: number[], // For daily: 0 (Sun) to 6 (Sat)
-  selectedMonths?: number[] // For monthly: 1 (Jan) to 12 (Dec)
+  selectedMonths?: number[], // For monthly: 1 (Jan) to 12 (Dec)
+  timezoneOffset?: number // Browser's timezone offset in minutes (e.g., -120 for UTC+2)
 ): Date {
   const now = new Date();
   const [hours, minutes] = time.split(":").map(Number);
+
+  // Default to 0 if no timezone offset provided (assumes UTC)
+  const offsetMinutes = timezoneOffset !== undefined ? timezoneOffset : 0;
 
   if (frequency === "weekly") {
     // Weekly: next occurrence is 7 days from now at the specified time
     const nextDate = new Date(now);
     nextDate.setDate(now.getDate() + 7);
-    nextDate.setHours(hours, minutes, 0, 0);
 
-    // If the time has already passed today, schedule for next week
+    // Set time in UTC (not local)
+    // User wants 11:03 LOCAL → we need to calculate what that is in UTC
+    // offset is +120 for UTC-2 (120 minutes behind UTC)
+    // So 11:03 local = 11:03 + 2 hours = 13:03 UTC
+    // Formula: UTC hours = local hours + (offset / 60)
+    const utcHours = hours + Math.floor(offsetMinutes / 60);
+    const utcMinutes = minutes + (offsetMinutes % 60);
+
+    nextDate.setUTCHours(utcHours, utcMinutes, 0, 0);
+
+    // If the time has already passed, schedule for next week
     if (nextDate <= now) {
       nextDate.setDate(nextDate.getDate() + 7);
     }
@@ -45,9 +59,14 @@ function calculateNextOccurrence(
         foundNextDay = true;
         break;
       } else if (day === currentDay) {
-        // Same day - check if time has passed
+        // Same day - check if time has passed (in UTC)
         const todayAtTime = new Date(now);
-        todayAtTime.setHours(hours, minutes, 0, 0);
+
+        // Set UTC time based on local time + offset
+        const utcHours = hours + Math.floor(offsetMinutes / 60);
+        const utcMinutes = minutes + (offsetMinutes % 60);
+        todayAtTime.setUTCHours(utcHours, utcMinutes, 0, 0);
+
         if (todayAtTime > now) {
           daysToAdd = 0;
           foundNextDay = true;
@@ -64,7 +83,11 @@ function calculateNextOccurrence(
 
     const nextDate = new Date(now);
     nextDate.setDate(now.getDate() + daysToAdd);
-    nextDate.setHours(hours, minutes, 0, 0);
+
+    // Set UTC time based on local time + offset
+    const utcHours = hours + Math.floor(offsetMinutes / 60);
+    const utcMinutes = minutes + (offsetMinutes % 60);
+    nextDate.setUTCHours(utcHours, utcMinutes, 0, 0);
 
     return nextDate;
   }
@@ -72,11 +95,14 @@ function calculateNextOccurrence(
   if (frequency === "monthly" && selectedMonths && selectedMonths.length > 0) {
     // Monthly: find next occurrence in selected months
     const currentMonth = now.getMonth() + 1; // 1-12
-    const currentDate = now.getDate();
     let nextDate = new Date(now);
 
     // Sort selected months
     const sortedMonths = [...selectedMonths].sort((a, b) => a - b);
+
+    // Calculate UTC time from local time
+    const utcHours = hours + Math.floor(offsetMinutes / 60);
+    const utcMinutes = minutes + (offsetMinutes % 60);
 
     // Try to find a month this year
     let foundMonth = false;
@@ -84,13 +110,14 @@ function calculateNextOccurrence(
       if (month > currentMonth) {
         nextDate.setMonth(month - 1); // Convert to 0-11
         nextDate.setDate(1); // First day of the month
-        nextDate.setHours(hours, minutes, 0, 0);
+        nextDate.setUTCHours(utcHours, utcMinutes, 0, 0);
         foundMonth = true;
         break;
       } else if (month === currentMonth) {
         // Same month - check if we can still schedule this month
         const testDate = new Date(now);
-        testDate.setHours(hours, minutes, 0, 0);
+        testDate.setUTCHours(utcHours, utcMinutes, 0, 0);
+
         if (testDate > now) {
           nextDate = testDate;
           foundMonth = true;
@@ -105,7 +132,7 @@ function calculateNextOccurrence(
       nextDate.setFullYear(now.getFullYear() + 1);
       nextDate.setMonth(firstMonth - 1);
       nextDate.setDate(1);
-      nextDate.setHours(hours, minutes, 0, 0);
+      nextDate.setUTCHours(utcHours, utcMinutes, 0, 0);
     }
 
     return nextDate;
@@ -114,8 +141,18 @@ function calculateNextOccurrence(
   // Fallback: next day at specified time
   const nextDate = new Date(now);
   nextDate.setDate(now.getDate() + 1);
-  nextDate.setHours(hours, minutes, 0, 0);
+
+  // Set UTC time based on local time + offset
+  const utcHours = hours + Math.floor(offsetMinutes / 60);
+  const utcMinutes = minutes + (offsetMinutes % 60);
+  nextDate.setUTCHours(utcHours, utcMinutes, 0, 0);
+
   return nextDate;
+  nextDate.setHours(hours, minutes, 0, 0);
+
+  // Convert to UTC
+  const utcTime = nextDate.getTime() - offsetMinutes * 60 * 1000;
+  return new Date(utcTime);
 }
 
 /**
@@ -134,8 +171,15 @@ export async function POST(req: NextRequest) {
     const userId = user._id.toString();
     const body = await req.json();
 
-    const { frequency, time, selectedDays, selectedMonths, platform, prompt } =
-      body;
+    const {
+      frequency,
+      time,
+      selectedDays,
+      selectedMonths,
+      platform,
+      prompt,
+      timezoneOffset,
+    } = body;
 
     // Validate required fields
     if (!frequency || !time || !platform || !prompt) {
@@ -173,16 +217,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Calculate next occurrence
+    // Calculate next occurrence (converts local time to UTC)
     const nextOccurrence = calculateNextOccurrence(
       frequency,
       time,
       selectedDays,
-      selectedMonths
+      selectedMonths,
+      timezoneOffset // Pass timezone offset for UTC conversion
     );
 
     console.log(
-      `📅 Creating recurring post - nextOccurrence: ${nextOccurrence.toISOString()}`
+      `📅 Creating recurring post - Local time: ${time}, Timezone offset: ${timezoneOffset}min, UTC nextOccurrence: ${nextOccurrence.toISOString()}`
     );
 
     // Connect to database
@@ -358,17 +403,19 @@ export async function PUT(req: NextRequest) {
         updateFields.selectedMonths !== undefined
           ? updateFields.selectedMonths
           : existingPost.selectedMonths;
+      const timezoneOffset = updateFields.timezoneOffset; // Get timezone offset from request
 
       nextOccurrence = calculateNextOccurrence(
         frequency,
         time,
         selectedDays,
-        selectedMonths
+        selectedMonths,
+        timezoneOffset // Pass timezone offset for UTC conversion
       );
 
       const now = new Date();
       console.log(
-        `📅 Updated recurring post ${id} - new nextOccurrence: ${nextOccurrence.toISOString()}`
+        `📅 Updated recurring post ${id} - Local time: ${time}, UTC nextOccurrence: ${nextOccurrence.toISOString()}`
       );
 
       if (nextOccurrence <= now) {

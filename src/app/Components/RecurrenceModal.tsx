@@ -20,6 +20,7 @@ export interface RecurrenceSettings {
   selectedMonths?: number[]; // For monthly: 1 (Jan) to 12 (Dec)
   platform: string;
   prompt: string;
+  timezoneOffset?: number; // Browser's timezone offset in minutes
 }
 
 const DAYS_OF_WEEK = [
@@ -88,11 +89,17 @@ export default function RecurrenceModal({
   };
 
   const handleConfirm = () => {
+    // Get browser's timezone offset in minutes
+    // getTimezoneOffset() returns offset in minutes (positive for west of UTC, negative for east)
+    // Example: UTC+2 (South Africa) returns -120 minutes
+    const timezoneOffset = new Date().getTimezoneOffset();
+
     const settings: RecurrenceSettings = {
       frequency: selectedFrequency,
       time: selectedTime,
       platform,
       prompt,
+      timezoneOffset, // Send timezone offset to backend for UTC conversion
     };
 
     if (selectedFrequency === "daily" && selectedDays.length > 0) {

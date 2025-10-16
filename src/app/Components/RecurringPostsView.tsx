@@ -157,6 +157,7 @@ export default function RecurringPostsView({
           time: settings.time,
           selectedDays: settings.selectedDays,
           selectedMonths: settings.selectedMonths,
+          timezoneOffset: settings.timezoneOffset, // Include timezone offset
         }),
       });
 
@@ -200,21 +201,19 @@ export default function RecurringPostsView({
   };
 
   const formatNextOccurrence = (timestamp: string) => {
-    return (
-      new Date(timestamp).toLocaleString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-        timeZone: "UTC", // Display in UTC to match the stored time
-      }) + " UTC"
-    );
-  };
-
-  const getFrequencyLabel = (post: RecurringPost) => {
+    const date = new Date(timestamp);
+    
+    // Format in local time
+    return date.toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };  const getFrequencyLabel = (post: RecurringPost) => {
     if (post.frequency === "daily" && post.selectedDays) {
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const days = post.selectedDays.map((d) => dayNames[d]).join(", ");
