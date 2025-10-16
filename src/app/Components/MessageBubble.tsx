@@ -15,7 +15,9 @@ export default function MessageBubble({
   const [isVisible, setIsVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
+  const [showActions, setShowActions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isLatestAiMessage) {
@@ -29,6 +31,24 @@ export default function MessageBubble({
   useEffect(() => {
     setEditedContent(message.content);
   }, [message.content]);
+
+  useEffect(() => {
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        actionsRef.current &&
+        !actionsRef.current.contains(event.target as Node)
+      ) {
+        setShowActions(false);
+      }
+    };
+
+    if (showActions) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showActions]);
 
   const handleSaveEdit = () => {
     if (onEditSave) {
@@ -47,6 +67,7 @@ export default function MessageBubble({
     if (onApprove) {
       onApprove(message.id);
     }
+    setShowActions(false);
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +82,30 @@ export default function MessageBubble({
       "📷 Image attachments are temporarily under maintenance due to API limitations. This feature will be restored soon!"
     );
     // fileInputRef.current?.click(); // Uncomment when ready to re-enable
+  };
+
+  const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(editedContent);
+      // Show a temporary success indicator
+      const button = document.activeElement as HTMLButtonElement;
+      if (button) {
+        const originalTitle = button.title;
+        button.title = "Copied!";
+        setTimeout(() => {
+          button.title = originalTitle;
+        }, 2000);
+      }
+      setShowActions(false);
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+      alert("Failed to copy to clipboard");
+    }
+  };
+
+  const handleReject = () => {
+    onReject(message.id);
+    setShowActions(false);
   };
 
   const statusLabels: Record<string, React.ReactNode> = {
@@ -96,47 +141,64 @@ export default function MessageBubble({
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-2">
-              <button
-                className="p-2 rounded-lg bg-transparent border border-sky-500 text-white hover:bg-sky-500/20 transition-colors text-lg"
-                onClick={() => setIsEditing(true)}
-                title="Edit post"
+          <div className="relative inline-block" ref={actionsRef}>
+            <button
+              onClick={() => setShowActions(!showActions)}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white hover:from-purple-500/30 hover:to-blue-500/30 transition-all font-medium text-sm flex items-center gap-2"
+            >
+              ⚡ Actions
+              <span
+                className={`transition-transform ${
+                  showActions ? "rotate-180" : ""
+                }`}
               >
-                ✏️
-              </button>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <button
-                className="p-2 rounded-lg bg-transparent border border-blue-500 text-white hover:bg-blue-500/20 transition-colors text-lg"
-                onClick={handleAttachClick}
-                title="Attach images"
-              >
-                ➕
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="p-2 rounded-lg bg-transparent border border-green-500 text-white hover:bg-green-500/20 transition-colors text-lg"
-                onClick={handleApprove}
-                title="Approve"
-              >
-                ✅
-              </button>
-              <button
-                className="p-2 rounded-lg bg-transparent border border-rose-500 text-white hover:bg-rose-500/20 transition-colors text-lg"
-                onClick={() => onReject(message.id)}
-                title="Reject"
-              >
-                ❌
-              </button>
-            </div>
+                ▼
+              </span>
+            </button>
+
+            {showActions && (
+              <div className="absolute bottom-full left-0 mb-2 bg-gray-900/95 backdrop-blur-sm border border-gray-700 rounded-lg shadow-xl overflow-y-auto max-h-[300px] z-50 min-w-[200px] whitespace-nowrap">
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-sky-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                  onClick={() => {
+                    setIsEditing(true);
+                    setShowActions(false);
+                  }}
+                >
+                  <span>✏️</span> Edit post
+                </button>
+
+                {message.status && (
+                  <button
+                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-purple-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                    onClick={handleCopyToClipboard}
+                  >
+                    <span>📋</span> Copy to clipboard
+                  </button>
+                )}
+
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-blue-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                  onClick={handleAttachClick}
+                >
+                  <span>➕</span> Attach images
+                </button>
+
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-green-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                  onClick={handleApprove}
+                >
+                  <span>✅</span> Approve
+                </button>
+
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-rose-500/20 transition-colors flex items-center gap-2"
+                  onClick={handleReject}
+                >
+                  <span>❌</span> Reject
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
