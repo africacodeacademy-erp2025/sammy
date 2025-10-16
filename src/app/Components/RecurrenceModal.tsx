@@ -154,7 +154,7 @@ export default function RecurrenceModal({
           {/* Time Input */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Time (24-hour format)
+              Time (24-hour format, UTC)
             </label>
             <input
               type="time"
@@ -165,7 +165,7 @@ export default function RecurrenceModal({
                        transition duration-300"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Current: {selectedTime}
+              Current: {selectedTime} UTC
             </p>
           </div>
 
@@ -235,7 +235,7 @@ export default function RecurrenceModal({
           {selectedFrequency === "weekly" && (
             <div className="px-4 py-3 bg-blue-900/20 rounded-lg border border-blue-700/50">
               <p className="text-sm text-blue-300">
-                📅 This post will be published weekly at {selectedTime}
+                📅 This post will be published weekly at {selectedTime} UTC
               </p>
             </div>
           )}
