@@ -945,13 +945,24 @@ export async function POST(req: NextRequest) {
         .collection("scheduledPosts")
         .updateOne({ _id: inserted.insertedId }, { $set: { jobId } });
 
+      // Format the scheduled time in user's local timezone for display
+      const scheduledDate = new Date(result.scheduleTime);
+      const localTimeString = scheduledDate.toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
       return NextResponse.json({
         success: true,
         scheduled: true,
-        message: `Post scheduled for ${new Date(
-          result.scheduleTime
-        ).toLocaleString()}. It will be generated and ready for review at the scheduled time.`,
-        scheduleTime: result.scheduleTime,
+        message: `Post scheduled for ${localTimeString}. It will be generated and ready for review at the scheduled time.`,
+        scheduleTime: result.scheduleTime, // UTC time for database
+        scheduleTimeLocal: localTimeString, // Formatted local time for display
         platform: platformResult.platform,
       });
     }
