@@ -302,9 +302,9 @@ export async function GET(req: NextRequest) {
       );
     });
 
-    // Redirect back to app with success
+    // Redirect back to chatbot with success
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/?facebook_connected=true`
+      `${process.env.NEXT_PUBLIC_BASE_URL}/chatbot?facebook_connected=true`
     );
   } catch (error) {
     console.error("Error in Facebook OAuth callback:", error);

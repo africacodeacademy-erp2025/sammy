@@ -275,9 +275,9 @@ export async function GET(req: NextRequest) {
       console.error("Background task failed - pulling past tweets:", err);
     });
 
-    // Redirect back to app with success
+    // Redirect back to chatbot with success
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/?twitter_connected=true`
+      `${process.env.NEXT_PUBLIC_BASE_URL}/chatbot?twitter_connected=true`
     );
   } catch (error) {
     console.error("Error in Twitter OAuth callback:", error);

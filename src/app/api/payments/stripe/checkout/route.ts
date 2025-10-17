@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       line_items: [{ price: priceId, quantity: 1 }],
       billing_address_collection: "auto",
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/cancel`,
+      cancel_url: `${origin}/chatbot`,
       allow_promotion_codes: true,
     });
 
