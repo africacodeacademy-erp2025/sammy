@@ -1,5 +1,7 @@
 # SaMMy – AI-Powered Social Media Assistant
 
+**🌐 Live App:** https://sammy.africacodefoundry.com/
+
 **SaMMy** is an intelligent social media management platform that generates, schedules, and posts AI-powered content to Twitter/X and Facebook. Built with Next.js 15, LangGraph state machines, and OpenAI, it provides seamless OAuth integration, automatic context learning, and intelligent content generation based on your past posts and messaging style.
 
 #### 📅 Scheduling System
@@ -150,6 +152,122 @@ agenda.on("success", async (job) => {
 ✅ "Post to Facebook on Oct 15 at 10:30 UTC"
 ```
 
+### 📜 Conversation History
+
+**SaMMy includes a comprehensive conversation history system** that allows users to save, manage, and restore previous AI chat conversations with full context preservation.
+
+#### How Conversation History Works
+
+**User Experience:**
+
+1. **Automatic Saving** - All AI chat conversations are automatically saved with unique thread IDs
+2. **History Access** - Click the "History" button to open the Conversation History modal
+3. **View Conversations** - Browse all past conversations with metadata:
+   - Conversation title (auto-generated from first message)
+   - Last user message preview
+   - Message count in the thread
+   - Platform (Twitter/Facebook if applicable)
+   - Last updated timestamp
+4. **Load Conversation** - Click "Load" to restore a previous conversation with full context
+5. **Delete Conversations** - Remove unwanted conversations permanently
+
+#### Technical Implementation
+
+**Database Schema:**
+
+```typescript
+// Chat messages stored per conversation thread
+{
+  _id: ObjectId,
+  userId: ObjectId,
+  threadId: string,        // Unique conversation identifier
+  role: "user" | "assistant" | "system",
+  content: string,
+  platform?: string,       // "twitter" | "facebook" | null
+  timestamp: Date,
+  metadata?: {
+    postStatus?: string,
+    scheduledFor?: Date
+  }
+}
+```
+
+**Features:**
+
+- ✅ **Thread-based Storage** - All messages grouped by unique `threadId`
+- ✅ **Full Context Restoration** - When loading a conversation, entire message history is retrieved
+- ✅ **Metadata Preservation** - Platform, timestamps, and post statuses preserved
+- ✅ **User-scoped** - Each user only sees their own conversation history
+- ✅ **Automatic Cleanup** - Option to delete old or unwanted conversations
+- ✅ **Real-time Updates** - Conversation list updates as new messages are sent
+
+**API Endpoints:**
+
+```typescript
+// Get all conversations for current user
+GET /api/chat/history
+Response: [{
+  threadId: string,
+  title: string,
+  lastUserMessage: string,
+  messageCount: number,
+  platform?: string,
+  updatedAt: string
+}]
+
+// Load specific conversation
+GET /api/chat/history/:threadId
+Response: {
+  threadId: string,
+  messages: Array<ChatMessage>
+}
+
+// Delete conversation
+DELETE /api/chat/history/:threadId
+Response: { success: boolean }
+```
+
+**Frontend Component:**
+
+- **HistoryModal** (`Components/HistoryModal.tsx`)
+  - Beautiful modal interface with dark theme
+  - Loading states and empty states
+  - Load and delete actions per conversation
+  - Message count and timestamp display
+  - Platform badges (Twitter/Facebook)
+  - Responsive design with overflow handling
+
+**Usage in Chatbot:**
+
+```typescript
+// Open history modal
+<button onClick={() => setShowHistory(true)}>
+  <History /> View History
+</button>;
+
+// Load conversation
+const handleLoadConversation = async (threadId: string) => {
+  const response = await fetch(`/api/chat/history/${threadId}`);
+  const data = await response.json();
+  setMessages(data.messages); // Restore full conversation
+  setCurrentThreadId(threadId); // Continue in same thread
+};
+
+// Delete conversation
+const handleDeleteConversation = async (threadId: string) => {
+  await fetch(`/api/chat/history/${threadId}`, { method: "DELETE" });
+  refreshConversations(); // Reload list
+};
+```
+
+**Benefits:**
+
+- 🔄 **Context Continuity** - Pick up conversations where you left off
+- 📊 **Conversation Tracking** - See all your AI interactions in one place
+- 🎯 **Efficient Workflow** - No need to re-explain context in new chats
+- 🗑️ **Privacy Control** - Delete conversations you no longer need
+- 📱 **Modern UI** - Beautiful, intuitive interface with smooth animations
+
 ## 🤝 Contributing
 
 We welcome contributions! Please follow these guidelines:
@@ -288,6 +406,7 @@ For issues, questions, or contributions:
 - 📊 **Automatic Context Learning** - Pulls and analyzes your past posts and Slack messages to match your writing style
 - 🎯 **Vector-Based Intelligence** - Uses MongoDB vector search with embeddings for semantic post analysis
 - ⏰ **Smart Scheduling** - Natural language schedule extraction ("tomorrow at 9am") with background workers
+- 📜 **Conversation History** - Save, load, and manage past AI chat conversations with full context restoration
 - ✅ **Review & Approve Workflow** - Preview generated posts before publishing
 - 🔒 **Enterprise Security** - AES-256-GCM encryption for all credentials and tokens
 - 🚀 **Multi-Platform** - Simultaneous posting to Twitter/X and Facebook
@@ -331,7 +450,9 @@ cp .env.example .env
 1. Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
 2. Create a new app or select existing app
 3. Enable OAuth 2.0 with PKCE
-4. Add redirect URI: `http://localhost:3000/api/integrations/twitter/callback`
+4. Add redirect URIs:
+   - **Production:** `https://sammy.africacodefoundry.com/api/integrations/twitter/callback`
+   - **Development:** `http://localhost:3000/api/integrations/twitter/callback`
 5. Copy Client ID and Client Secret to `.env`
 
 **Facebook:**
@@ -339,7 +460,9 @@ cp .env.example .env
 1. Go to [Facebook Developers](https://developers.facebook.com/apps/)
 2. Create a new app or select existing app
 3. Add Facebook Login product
-4. Add redirect URI: `http://localhost:3000/api/integrations/facebook/callback`
+4. Add redirect URIs:
+   - **Production:** `https://sammy.africacodefoundry.com/api/integrations/facebook/callback`
+   - **Development:** `http://localhost:3000/api/integrations/facebook/callback`
 5. Copy App ID and App Secret to `.env`
 
 **Slack (Optional - for context ingestion):**
@@ -353,10 +476,13 @@ cp .env.example .env
    - `groups:read` - List private channels
    - `users:read` - Read user information
    - `chat:write` - Send messages
-4. Add redirect URI: `http://localhost:3000/api/integrations/slack/callback`
+4. Add redirect URIs:
+   - **Production:** `https://sammy.africacodefoundry.com/api/integrations/slack/callback`
+   - **Development:** `http://localhost:3000/api/integrations/slack/callback`
 5. Copy Client ID and Client Secret to `.env`
 6. Configure Event Subscriptions (optional for real-time ingestion):
-   - Request URL: `https://your-domain.com/api/sources/slack/events`
+   - **Production Request URL:** `https://sammy.africacodefoundry.com/api/sources/slack/events`
+   - **Development Request URL:** `http://localhost:3000/api/sources/slack/events` (requires ngrok or similar)
    - Subscribe to `message.channels` and `message.groups` events
 
 **Gmail SMTP (for password reset emails):**
@@ -389,7 +515,9 @@ npx tsx workers/schedulePostWorker.ts
 
 ### 5. Access the Application
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+**Live Production App:** [https://sammy.africacodefoundry.com/](https://sammy.africacodefoundry.com/)
+
+**Local Development:** Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 6. Test Email Functionality (Optional)
 
@@ -721,6 +849,11 @@ OPEN_AI_API=sk-proj-your_openai_api_key_here
 # ============================================
 # Application URLs
 # ============================================
+# For Production, use:
+# NEXT_PUBLIC_BASE_URL=https://sammy.africacodefoundry.com
+# NEXT_PUBLIC_APP_URL=https://sammy.africacodefoundry.com
+
+# For Local Development:
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
@@ -729,6 +862,8 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # ============================================
 TWITTER_CLIENT_ID=your_twitter_oauth2_client_id
 TWITTER_CLIENT_SECRET=your_twitter_oauth2_client_secret
+# Production: https://sammy.africacodefoundry.com/api/integrations/twitter/callback
+# Development: http://localhost:3000/api/integrations/twitter/callback
 TWITTER_REDIRECT_URI=http://localhost:3000/api/integrations/twitter/callback
 
 # ============================================
@@ -736,6 +871,8 @@ TWITTER_REDIRECT_URI=http://localhost:3000/api/integrations/twitter/callback
 # ============================================
 FACEBOOK_APP_ID=your_facebook_app_id
 FACEBOOK_APP_SECRET=your_facebook_app_secret
+# Production: https://sammy.africacodefoundry.com/api/integrations/facebook/callback
+# Development: http://localhost:3000/api/integrations/facebook/callback
 FACEBOOK_REDIRECT_URI=http://localhost:3000/api/integrations/facebook/callback
 
 # ============================================
@@ -743,6 +880,8 @@ FACEBOOK_REDIRECT_URI=http://localhost:3000/api/integrations/facebook/callback
 # ============================================
 SLACK_CLIENT_ID=your_slack_oauth2_client_id
 SLACK_CLIENT_SECRET=your_slack_oauth2_client_secret
+# Production: https://sammy.africacodefoundry.com/api/integrations/slack/callback
+# Development: http://localhost:3000/api/integrations/slack/callback
 SLACK_REDIRECT_URI=http://localhost:3000/api/integrations/slack/callback
 
 # ============================================
@@ -764,8 +903,9 @@ SMTP_PASS=your_gmail_app_password
 
 - **OAuth Redirect URIs**:
 
-  - Development: `http://localhost:3000/api/integrations/{platform}/callback`
-  - Production: Update with your production domain
+  - **Production:** `https://sammy.africacodefoundry.com/api/integrations/{platform}/callback`
+  - **Development:** `http://localhost:3000/api/integrations/{platform}/callback`
+  - Replace `{platform}` with `twitter`, `facebook`, or `slack`
 
 - **Gmail SMTP Configuration**:
 
