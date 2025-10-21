@@ -69,13 +69,25 @@ export default function ChatBot() {
     const fetchUser = async () => {
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
+        if (!token) {
+          // No token, redirect to home
+          window.location.href = "/";
+          return;
+        }
 
         const res = await fetch("/api/user", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Token is invalid or expired
+          if (res.status === 401) {
+            localStorage.removeItem("token");
+            window.location.href = "/";
+            return;
+          }
+          return;
+        }
 
         const user = await res.json();
 
@@ -89,6 +101,9 @@ export default function ChatBot() {
         }
       } catch (err) {
         console.error("Failed to fetch user", err);
+        // On network error, also redirect to be safe
+        localStorage.removeItem("token");
+        window.location.href = "/";
       }
     };
 

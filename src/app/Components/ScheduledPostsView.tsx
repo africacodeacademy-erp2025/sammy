@@ -59,6 +59,14 @@ export default function ScheduledPostView({
           Authorization: token ? `Bearer ${token}` : "",
         },
       });
+
+      if (res.status === 401) {
+        // Token expired, redirect to home
+        localStorage.removeItem("token");
+        window.location.href = "/";
+        return;
+      }
+
       const data = await res.json();
       setScheduledPosts(data.scheduled || initialPosts);
       setReadyForReviewPosts(data.readyForReview || []);

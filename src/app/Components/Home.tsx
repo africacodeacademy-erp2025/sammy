@@ -11,10 +11,36 @@ export default function Home() {
   const formRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // Check for JWT on mount
+  // Check for JWT on mount and verify it's valid
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) setHasToken(true);
+    const verifyToken = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setHasToken(false);
+        return;
+      }
+
+      // Verify token is still valid by checking with the server
+      try {
+        const res = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          setHasToken(true);
+        } else {
+          // Token is invalid or expired, remove it
+          localStorage.removeItem("token");
+          setHasToken(false);
+        }
+      } catch (error) {
+        // Network error or server error, remove token to be safe
+        localStorage.removeItem("token");
+        setHasToken(false);
+      }
+    };
+
+    verifyToken();
   }, []);
 
   // Scroll to form when view changes
