@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { RotateCw } from "lucide-react";
 import Button from "./UI/Button";
 
 interface RecurrenceModalProps {
@@ -122,11 +123,11 @@ export default function RecurrenceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700">
+      <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700/50">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-700/50">
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-            <span className="text-2xl">🔄</span>
+            <RotateCw className="w-6 h-6" />
             Set Up Recurring Post
           </h2>
           <p className="text-sm text-gray-400 mt-1">
@@ -249,7 +250,7 @@ export default function RecurrenceModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-700 flex gap-3">
+        <div className="px-6 py-4 border-t border-gray-700/50 flex gap-3">
           <Button
             variant="secondary"
             onClick={onClose}

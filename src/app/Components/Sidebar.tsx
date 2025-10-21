@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Calendar, Key } from "lucide-react";
 import PayButton from "./UI/PayButton";
 import SidebarButton from "./UI/SidebarButton";
 
@@ -50,13 +51,13 @@ export default function Sidebar({
 
       <div
         className={`
-          fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700
+          fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700/50
           transform transition-transform duration-300 z-50 shadow-2xl flex flex-col
           ${isOpen ? "translate-x-0" : "translate-x-full"}
         `}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+        <div className="p-4 border-b border-gray-700/50 flex items-center justify-between bg-gray-950">
           <div className="flex items-center gap-3">
             {userEmail && (
               <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-[11px] leading-none uppercase overflow-hidden shrink-0 select-none">
@@ -74,19 +75,19 @@ export default function Sidebar({
         </div>
 
         {/* Main Content */}
-        <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+        <div className="p-4 space-y-4 flex-1 overflow-y-auto bg-gray-950">
           <SidebarButton
             onClick={onViewSchedule}
             title="View Schedule"
             description="See upcoming posts"
-            icon={<span className="text-blue-400">📅</span>}
+            icon={<Calendar className="w-5 h-5 text-blue-400" />}
           />
 
           <SidebarButton
             onClick={onManageCredentials}
             title="Sources & Platform"
             description="Connect sources and platform"
-            icon={<span className="text-green-400">🔑</span>}
+            icon={<Key className="w-5 h-5 text-green-400" />}
           />
 
           <PayButton priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID} />

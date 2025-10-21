@@ -33,12 +33,13 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
 
   // Helper functions
   const updateFormState = (updates: Partial<FormState>): void => {
-    setFormState(prev => ({ ...prev, ...updates }));
+    setFormState((prev) => ({ ...prev, ...updates }));
   };
 
   const validateEmail = (): string | null => {
     if (!formState.email) return "Email is required";
-    if (!EMAIL_REGEX.test(formState.email)) return "Please enter a valid email address";
+    if (!EMAIL_REGEX.test(formState.email))
+      return "Please enter a valid email address";
     return null;
   };
 
@@ -50,47 +51,50 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
     }
 
     updateFormState({ error: "", loading: true });
-    
+
     try {
       const response = await fetch(API_ENDPOINTS.FORGOT_PASSWORD, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: formState.email }),
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
-        updateFormState({ 
-          message: data.message, 
+        updateFormState({
+          message: data.message,
           submitted: true,
-          loading: false 
+          loading: false,
         });
       } else {
-        updateFormState({ 
+        updateFormState({
           error: data.error || "Failed to send reset email",
-          loading: false 
+          loading: false,
         });
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to send reset email";
-      updateFormState({ 
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to send reset email";
+      updateFormState({
         error: errorMessage,
-        loading: false 
+        loading: false,
       });
     }
   };
 
   if (formState.submitted) {
     return (
-      <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg backdrop-blur-sm w-full max-w-md lg:w-[460px]">
+      <div className="bg-gray-800/50 p-8 rounded-2xl shadow-lg border border-gray-700/50 w-full max-w-md lg:w-[460px]">
         <div className="text-center">
           <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
               <span className="text-white text-lg">✓</span>
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-4">Check Your Email</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">
+            Check Your Email
+          </h2>
           <p className="text-gray-300 mb-6">{formState.message}</p>
           <button
             onClick={onBack}
@@ -105,7 +109,7 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
   }
 
   return (
-    <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg backdrop-blur-sm w-full max-w-md lg:w-[460px]">
+    <div className="bg-gray-800/50 p-8 rounded-2xl shadow-lg border border-gray-700/50 w-full max-w-md lg:w-[460px]">
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors"
@@ -113,23 +117,28 @@ export default function ForgotPassword({ onBack }: ForgotPasswordProps) {
         <ArrowLeft size={18} />
         Back to Login
       </button>
-      
-      <h2 className="text-2xl font-bold text-white mb-2 text-center">Forgot Password</h2>
+
+      <h2 className="text-2xl font-bold text-white mb-2 text-center">
+        Forgot Password
+      </h2>
       <p className="text-gray-400 mb-6 text-center text-sm">
-        Enter your email address and we&apos;ll send you a link to reset your password.
+        Enter your email address and we&apos;ll send you a link to reset your
+        password.
       </p>
-      
-      {formState.error && <p className="text-red-500 text-sm mb-4">{formState.error}</p>}
-      
+
+      {formState.error && (
+        <p className="text-red-500 text-sm mb-4">{formState.error}</p>
+      )}
+
       <input
         type="email"
         placeholder="Email address"
-        className="w-full mb-6 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        className="w-full mb-6 p-3 rounded-xl bg-gray-900/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700/50"
         value={formState.email}
         onChange={(e) => updateFormState({ email: e.target.value })}
         onKeyPress={(e) => e.key === "Enter" && handleSubmit()}
       />
-      
+
       <button
         onClick={handleSubmit}
         disabled={formState.loading}

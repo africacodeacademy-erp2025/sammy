@@ -1,6 +1,14 @@
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import MessageBubble from "../Components/MessageBubble";
+import {
+  ChevronLeft,
+  ChevronRight,
+  RotateCw,
+  Calendar as CalendarIcon,
+  Clock,
+  CheckCircle,
+} from "lucide-react";
 
 export interface ScheduledPost {
   threadId: string | null;
@@ -256,14 +264,14 @@ export default function ScheduledPostView({
   return (
     <div className="flex flex-col md:flex-row h-screen w-full bg-gray-950">
       {/* Sidebar Calendar */}
-      <div className="w-full md:w-80 bg-gray-900/90 border-r border-gray-700/50 flex flex-col">
-        <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50">
+      <div className="w-full md:w-80 bg-gray-950 border-r border-gray-700/50 flex flex-col shrink-0">
+        <div className="p-4 bg-gray-950 border-b border-gray-700/50">
           <div className="flex items-center gap-3 mb-6">
             <button
               onClick={onBack}
-              className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700"
+              className="p-2 rounded-lg text-white hover:bg-gray-700/50 transition-colors"
             >
-              ←
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <div>
               <h1 className="font-bold text-white text-sm md:text-base">
@@ -275,23 +283,27 @@ export default function ScheduledPostView({
         </div>
 
         {/* Mini Calendar */}
-        <div className="p-4 flex-1 overflow-y-auto">
+        <div className="p-4 flex-1 overflow-y-auto bg-gray-950">
           {/* Legend */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-medium text-sm md:text-base">
+              <h3 className="text-white font-medium text-sm md:text-base flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4" />
                 {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
               </h3>
               <div className="flex gap-1">
-                {[-1, 1].map((dir) => (
-                  <button
-                    key={dir}
-                    onClick={() => navigateMonth(dir)}
-                    className="w-7 h-7 rounded bg-gray-700/50 text-white hover:bg-gray-700"
-                  >
-                    {dir === -1 ? "‹" : "›"}
-                  </button>
-                ))}
+                <button
+                  onClick={() => navigateMonth(-1)}
+                  className="w-7 h-7 rounded text-white hover:bg-gray-700/50 transition-colors flex items-center justify-center"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => navigateMonth(1)}
+                  className="w-7 h-7 rounded text-white hover:bg-gray-700/50 transition-colors flex items-center justify-center"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
@@ -344,25 +356,27 @@ export default function ScheduledPostView({
         </div>
 
         {/* Show Ready for Review Button */}
-        <div className="p-4 border-t border-gray-700/50 space-y-2">
+        <div className="p-4 border-t border-gray-700/50 space-y-2 bg-gray-950">
           <button
             onClick={() => setShowReadyPosts(!showReadyPosts)}
-            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold hover:from-blue-600 hover:to-purple-600 transition-all"
+            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:from-blue-600 hover:to-purple-600 transition-all flex items-center justify-center gap-2"
           >
+            <Clock className="w-4 h-4" />
             {showReadyPosts ? "Hide Ready for Review" : "Show Ready for Review"}
           </button>
           <button
             onClick={() => (window.location.href = "/manage-recurring")}
-            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold hover:from-green-600 hover:to-teal-600 transition-all"
+            className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-green-500 to-teal-500 text-white font-medium hover:from-green-600 hover:to-teal-600 transition-all flex items-center justify-center gap-2"
           >
-            🔄 Manage Recurring Posts
+            <RotateCw className="w-4 h-4" />
+            Manage Recurring Posts
           </button>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+      <div className="flex-1 flex flex-col bg-gray-950">
+        <div className="p-4 bg-gray-950 border-b border-gray-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <h2 className="text-lg md:text-xl text-white font-medium">
             {showReadyPosts
               ? "Posts Ready for Review"
@@ -373,17 +387,18 @@ export default function ScheduledPostView({
                   day: "numeric",
                 })}
           </h2>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-400 flex items-center gap-1">
+            <Clock className="w-3 h-3" />
             Auto-refreshing in {refreshCountdown}s
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-900/30 to-gray-900/10">
-          <div className="p-4 md:p-6">
+        <div className="flex-1 overflow-y-auto bg-gray-950">
+          <div className="max-w-4xl mx-auto p-4 md:p-6">
             {showReadyPosts ? (
               readyForReviewPosts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-60 text-center">
-                  <div className="text-6xl mb-6">✅</div>
+                  <CheckCircle className="w-16 h-16 text-green-400 mb-4" />
                   <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
                     No posts ready for review
                   </h3>
@@ -422,7 +437,7 @@ export default function ScheduledPostView({
               )
             ) : selectedDatePosts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-60 text-center">
-                <div className="text-6xl mb-6">📝</div>
+                <CalendarIcon className="w-16 h-16 text-gray-500 mb-4" />
                 <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
                   No posts scheduled
                 </h3>

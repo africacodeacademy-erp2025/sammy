@@ -8,6 +8,10 @@ import { connectDB } from "../../../../lib/mongo";
 import { getUserFromRequest } from "../../../../lib/auth";
 import { decrypt } from "../../../../lib/crypto";
 import { ObjectId } from "mongodb";
+import {
+  buildSmartContext,
+  shouldUseRAG,
+} from "../../../../lib/contextManager";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
@@ -571,6 +575,43 @@ export async function generatePost(
   const db = await connectDB();
   const queryEmbedding = await getEmbedding(prompt);
 
+  // --- NEW: Load conversation history if threadId exists ---
+  let conversationContext: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }> = [];
+
+  if (state.threadId) {
+    try {
+      const conversation = await db.collection("chatHistory").findOne({
+        userId,
+        threadId: state.threadId,
+      });
+
+      if (conversation && conversation.messages) {
+        // Build smart context using hybrid approach
+        const useRAG = shouldUseRAG(conversation.messages);
+        conversationContext = await buildSmartContext(
+          conversation.messages,
+          prompt,
+          {
+            maxRecentMessages: 6, // Last 3 exchanges
+            maxTotalTokens: 2000,
+            useRAG,
+            ragTopK: 2,
+          }
+        );
+
+        console.log(
+          `📚 Loaded ${conversationContext.length} context messages (RAG: ${useRAG})`
+        );
+      }
+    } catch (err) {
+      console.error("Error loading conversation context:", err);
+      // Continue without context if loading fails
+    }
+  }
+
   try {
     // --- 1. Retrieve context from Slack messages (RAG) ---
     const contextResults = await db
@@ -666,18 +707,27 @@ IMPORTANT: Follow these platform-specific rules strictly:
       isRandomPost = true;
     }
 
+    // Build messages array with conversation context
+    const messages: Array<{
+      role: "system" | "user" | "assistant";
+      content: string;
+    }> = [
+      {
+        role: "system",
+        content: systemMessage,
+      },
+      // Include conversation history for context continuity
+      ...conversationContext,
+      // Add current user message
+      {
+        role: "user",
+        content: userMessage,
+      },
+    ];
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: systemMessage,
-        },
-        {
-          role: "user",
-          content: userMessage,
-        },
-      ],
+      messages,
       max_tokens: 250,
     });
 
@@ -839,7 +889,9 @@ export async function POST(req: NextRequest) {
     }
     const userId = user._id.toString();
 
-    const { prompt, platform } = await req.json();
+    // threadId: Optional - if provided, loads conversation history for context
+    // conversationHistory: Not used directly here (context loaded from DB via threadId)
+    const { prompt, platform, threadId } = await req.json();
 
     // Check for greetings first - no platform needed
     if (detectGreeting(prompt)) {
@@ -899,6 +951,7 @@ export async function POST(req: NextRequest) {
       prompt,
       platform: platformResult.platform,
       userId,
+      threadId: threadId || undefined, // Pass threadId for conversation context
     });
 
     if (result.success === false)

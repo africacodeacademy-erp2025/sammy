@@ -41,20 +41,26 @@ const API_ENDPOINTS = {
   UPDATE_EMAIL: "/api/auth/update-email",
 } as const;
 
-export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps) {
+export default function ProfileSidebar({
+  isOpen,
+  onClose,
+}: ProfileSidebarProps) {
   // UI State
   const [activeTab, setActiveTab] = useState<Tab>("email");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  
+
   // User Data
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
-  
+
   // Password Form State
-  const [passwordForm, setPasswordForm] = useState<PasswordFormData>(INITIAL_PASSWORD_FORM);
-  const [passwordVisibility, setPasswordVisibility] = useState<PasswordVisibility>(INITIAL_PASSWORD_VISIBILITY);
+  const [passwordForm, setPasswordForm] = useState<PasswordFormData>(
+    INITIAL_PASSWORD_FORM
+  );
+  const [passwordVisibility, setPasswordVisibility] =
+    useState<PasswordVisibility>(INITIAL_PASSWORD_VISIBILITY);
 
   // Helper functions
   const getAuthToken = (): string | null => localStorage.getItem("token");
@@ -96,19 +102,19 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
   // Validation helpers
   const validatePasswordForm = (): string | null => {
     const { current, new: newPass, confirm } = passwordForm;
-    
+
     if (!current || !newPass || !confirm) {
       return "All fields are required";
     }
-    
+
     if (newPass !== confirm) {
       return "New passwords do not match";
     }
-    
+
     if (newPass.length < 6) {
       return "New password must be at least 6 characters";
     }
-    
+
     return null;
   };
 
@@ -116,22 +122,22 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
     if (!newEmail) {
       return "Email is required";
     }
-    
+
     if (newEmail === userEmail) {
       return "New email must be different from current email";
     }
-    
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(newEmail)) {
       return "Please enter a valid email address";
     }
-    
+
     return null;
   };
 
   // API call helpers
   const makeAuthenticatedRequest = async (
-    endpoint: string, 
+    endpoint: string,
     options: RequestInit = {}
   ): Promise<Response> => {
     const token = getAuthToken();
@@ -161,13 +167,16 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
     setLoading(true);
 
     try {
-      const response = await makeAuthenticatedRequest(API_ENDPOINTS.CHANGE_PASSWORD, {
-        method: "PUT",
-        body: JSON.stringify({
-          currentPassword: passwordForm.current,
-          newPassword: passwordForm.new,
-        }),
-      });
+      const response = await makeAuthenticatedRequest(
+        API_ENDPOINTS.CHANGE_PASSWORD,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            currentPassword: passwordForm.current,
+            newPassword: passwordForm.new,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -178,7 +187,8 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
         setError(data.error || "Failed to update password");
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to update password";
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update password";
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -198,10 +208,13 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
     setLoading(true);
 
     try {
-      const response = await makeAuthenticatedRequest(API_ENDPOINTS.UPDATE_EMAIL, {
-        method: "PUT",
-        body: JSON.stringify({ newEmail }),
-      });
+      const response = await makeAuthenticatedRequest(
+        API_ENDPOINTS.UPDATE_EMAIL,
+        {
+          method: "PUT",
+          body: JSON.stringify({ newEmail }),
+        }
+      );
 
       const data = await response.json();
 
@@ -213,7 +226,8 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
         setError(data.error || "Failed to update email");
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to update email";
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to update email";
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -221,12 +235,15 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
   };
 
   // Helper functions for password form
-  const updatePasswordField = (field: keyof PasswordFormData, value: string): void => {
-    setPasswordForm(prev => ({ ...prev, [field]: value }));
+  const updatePasswordField = (
+    field: keyof PasswordFormData,
+    value: string
+  ): void => {
+    setPasswordForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const togglePasswordVisibility = (field: keyof PasswordVisibility): void => {
-    setPasswordVisibility(prev => ({ ...prev, [field]: !prev[field] }));
+    setPasswordVisibility((prev) => ({ ...prev, [field]: !prev[field] }));
   };
 
   // Tab switching helper
@@ -247,32 +264,46 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
 
       <div
         className={`
-          fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700
+          fixed top-0 right-0 h-full w-80 bg-gray-900 border-l border-gray-700/50
           transform transition-transform duration-300 z-50 shadow-2xl flex flex-col
           ${isOpen ? "translate-x-0" : "translate-x-full"}
         `}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+        <div className="p-4 border-b border-gray-700/50 flex items-center justify-between bg-gray-950">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white">
               <User size={16} />
             </div>
             <div>
               <h2 className="text-white font-semibold">Profile Settings</h2>
-              {userEmail && <p className="text-xs text-gray-400">{userEmail}</p>}
+              {userEmail && (
+                <p className="text-xs text-gray-400">{userEmail}</p>
+              )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700"
+            className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700/50 transition-colors"
           >
-            ✕
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
           </button>
         </div>
 
         {/* Main Content */}
-        <div className="p-4 flex-1 overflow-y-auto">
+        <div className="p-4 flex-1 overflow-y-auto bg-gray-950">
           {/* Tabs */}
           <div className="flex space-x-1 mb-6 bg-gray-800 rounded-lg p-1">
             <button
@@ -305,7 +336,7 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
-          
+
           {message && (
             <div className="p-3 rounded-lg bg-green-500/20 border border-green-500/30 mb-4">
               <p className="text-green-400 text-sm">{message}</p>
@@ -315,8 +346,10 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
           {/* Email Update Tab */}
           {activeTab === "email" && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-white mb-4">Update Email</h3>
-              
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Update Email
+              </h3>
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Current Email
@@ -356,7 +389,8 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
 
               <div className="mt-4 p-3 rounded-lg bg-blue-500/20 border border-blue-500/30">
                 <p className="text-blue-400 text-xs">
-                  Make sure you have access to the new email address. You&apos;ll need to verify it.
+                  Make sure you have access to the new email address.
+                  You&apos;ll need to verify it.
                 </p>
               </div>
             </div>
@@ -365,7 +399,9 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
           {/* Password Update Tab */}
           {activeTab === "password" && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-white mb-4">Change Password</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Change Password
+              </h3>
 
               {/* Current Password */}
               <div>
@@ -376,7 +412,9 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
                   <input
                     type={passwordVisibility.current ? "text" : "password"}
                     value={passwordForm.current}
-                    onChange={(e) => updatePasswordField("current", e.target.value)}
+                    onChange={(e) =>
+                      updatePasswordField("current", e.target.value)
+                    }
                     className="w-full p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Enter current password"
                   />
@@ -385,7 +423,11 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
                     onClick={() => togglePasswordVisibility("current")}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
                   >
-                    {passwordVisibility.current ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {passwordVisibility.current ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -408,7 +450,11 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
                     onClick={() => togglePasswordVisibility("new")}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
                   >
-                    {passwordVisibility.new ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {passwordVisibility.new ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -422,7 +468,9 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
                   <input
                     type={passwordVisibility.confirm ? "text" : "password"}
                     value={passwordForm.confirm}
-                    onChange={(e) => updatePasswordField("confirm", e.target.value)}
+                    onChange={(e) =>
+                      updatePasswordField("confirm", e.target.value)
+                    }
                     className="w-full p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Confirm new password"
                   />
@@ -431,7 +479,11 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
                     onClick={() => togglePasswordVisibility("confirm")}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
                   >
-                    {passwordVisibility.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {passwordVisibility.confirm ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
                   </button>
                 </div>
               </div>
@@ -450,7 +502,8 @@ export default function ProfileSidebar({ isOpen, onClose }: ProfileSidebarProps)
 
               <div className="mt-4 p-3 rounded-lg bg-blue-500/20 border border-blue-500/30">
                 <p className="text-blue-400 text-xs">
-                  Password must be at least 6 characters long. Make sure to use a strong password with a mix of letters, numbers, and symbols.
+                  Password must be at least 6 characters long. Make sure to use
+                  a strong password with a mix of letters, numbers, and symbols.
                 </p>
               </div>
             </div>

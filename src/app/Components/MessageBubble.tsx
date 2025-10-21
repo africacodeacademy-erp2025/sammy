@@ -2,6 +2,18 @@
 import { MessageBubbleProps } from "../Types";
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import {
+  Edit,
+  Copy,
+  ImagePlus,
+  Check,
+  X,
+  ChevronDown,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
 
 export default function MessageBubble({
   message,
@@ -111,8 +123,9 @@ export default function MessageBubble({
   const statusLabels: Record<string, React.ReactNode> = {
     pending: (
       <div className="flex flex-col gap-3 mt-3 p-3 bg-black/20 rounded-lg border border-white/10">
-        <span className="text-sm font-medium text-white/80">
-          📝 Ready for review
+        <span className="text-sm font-medium text-white/80 flex items-center gap-2">
+          <Clock className="w-4 h-4" />
+          Ready for review
         </span>
 
         {isEditing ? (
@@ -125,18 +138,18 @@ export default function MessageBubble({
             />
             <div className="flex gap-2 justify-end">
               <button
-                className="p-2 rounded-lg bg-transparent border border-gray-500 text-white hover:bg-gray-500/20 transition-colors text-lg"
+                className="p-2 rounded-lg bg-transparent border border-gray-500 text-white hover:bg-gray-500/20 transition-colors flex items-center gap-1"
                 onClick={handleCancelEdit}
                 title="Cancel"
               >
-                ❌
+                <X className="w-4 h-4" />
               </button>
               <button
-                className="p-2 rounded-lg bg-transparent border border-green-500 text-white hover:bg-green-500/20 transition-colors text-lg"
+                className="p-2 rounded-lg bg-transparent border border-green-500 text-white hover:bg-green-500/20 transition-colors flex items-center gap-1"
                 onClick={handleSaveEdit}
                 title="Save"
               >
-                💾
+                <Check className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -146,14 +159,12 @@ export default function MessageBubble({
               onClick={() => setShowActions(!showActions)}
               className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white hover:from-purple-500/30 hover:to-blue-500/30 transition-all font-medium text-sm flex items-center gap-2"
             >
-              ⚡ Actions
-              <span
-                className={`transition-transform ${
+              Actions
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${
                   showActions ? "rotate-180" : ""
                 }`}
-              >
-                ▼
-              </span>
+              />
             </button>
 
             {showActions && (
@@ -165,7 +176,8 @@ export default function MessageBubble({
                     setShowActions(false);
                   }}
                 >
-                  <span>✏️</span> Edit post
+                  <Edit className="w-4 h-4" />
+                  Edit post
                 </button>
 
                 {message.status && (
@@ -173,7 +185,8 @@ export default function MessageBubble({
                     className="w-full px-4 py-2 text-left text-sm text-white hover:bg-purple-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
                     onClick={handleCopyToClipboard}
                   >
-                    <span>📋</span> Copy to clipboard
+                    <Copy className="w-4 h-4" />
+                    Copy to clipboard
                   </button>
                 )}
 
@@ -181,21 +194,24 @@ export default function MessageBubble({
                   className="w-full px-4 py-2 text-left text-sm text-white hover:bg-blue-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
                   onClick={handleAttachClick}
                 >
-                  <span>➕</span> Attach images
+                  <ImagePlus className="w-4 h-4" />
+                  Attach images
                 </button>
 
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-white hover:bg-green-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
                   onClick={handleApprove}
                 >
-                  <span>✅</span> Approve
+                  <Check className="w-4 h-4" />
+                  Approve
                 </button>
 
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-white hover:bg-rose-500/20 transition-colors flex items-center gap-2"
                   onClick={handleReject}
                 >
-                  <span>❌</span> Reject
+                  <X className="w-4 h-4" />
+                  Reject
                 </button>
               </div>
             )}
@@ -206,8 +222,8 @@ export default function MessageBubble({
     // NEW: Pending approval status with hourglass spinner
     pending_approval: (
       <div className="flex items-center gap-2 mt-2 text-xs text-amber-300 font-medium">
-        <div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" />
-        <span>⏳ Approval pending...</span>
+        <Clock className="w-3 h-3 animate-pulse" />
+        <span>Approval pending...</span>
       </div>
     ),
     scheduled: (
@@ -221,17 +237,20 @@ export default function MessageBubble({
     ),
     posted: (
       <div className="flex items-center gap-2 mt-2 text-xs text-green-300 font-medium">
-        <span>✔️</span> Posted
+        <CheckCircle className="w-4 h-4" />
+        <span>Posted</span>
       </div>
     ),
     rejected: (
       <div className="flex items-center gap-2 mt-2 text-xs text-rose-300 font-medium">
-        <span>🚫</span> Rejected
+        <XCircle className="w-4 h-4" />
+        <span>Rejected</span>
       </div>
     ),
     error: (
       <div className="flex items-center gap-2 mt-2 text-xs text-red-300 font-medium">
-        <span>❌</span> Error
+        <AlertCircle className="w-4 h-4" />
+        <span>Error</span>
       </div>
     ),
   };

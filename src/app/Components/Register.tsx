@@ -34,7 +34,8 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
 
       onSwitchToLogin();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Registration failed";
+      const message =
+        err instanceof Error ? err.message : "Registration failed";
       setError(message);
     } finally {
       setLoading(false);
@@ -42,14 +43,16 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
   };
 
   return (
-    <div className="bg-gray-900/90 p-8 rounded-2xl shadow-lg backdrop-blur-sm w-full max-w-md lg:w-[460px] lg:h-[350px]">
-      <h2 className="text-2xl font-bold text-white mb-6 text-center">Create Account</h2>
+    <div className="bg-gray-800/50 p-8 rounded-2xl shadow-lg border border-gray-700/50 w-full max-w-md lg:w-[460px]">
+      <h2 className="text-2xl font-bold text-white mb-6 text-center">
+        Create Account
+      </h2>
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
       <input
         type="email"
         placeholder="Email"
-        className="w-full mb-4 p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+        className="w-full mb-4 p-3 rounded-xl bg-gray-900/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700/50"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
@@ -58,14 +61,14 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
         <input
           type={showPassword ? "text" : "password"}
           placeholder="Password"
-          className="w-full p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full p-3 rounded-xl bg-gray-900/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700/50"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
         <button
           type="button"
           onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
         >
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -75,14 +78,14 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
         <input
           type={showConfirmPassword ? "text" : "password"}
           placeholder="Confirm Password"
-          className="w-full p-3 rounded-xl bg-gray-800/80 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full p-3 rounded-xl bg-gray-900/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700/50"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
         <button
           type="button"
           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
         >
           {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -100,11 +103,11 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
         )}
       </button>
 
-      <p className="text-white/60 mt-4 text-center text-sm">
+      <p className="text-gray-400 mt-4 text-center text-sm">
         Already have an account?{" "}
         <button
           onClick={onSwitchToLogin}
-          className="text-purple-500 hover:underline"
+          className="text-purple-400 hover:text-purple-300 hover:underline"
         >
           Login
         </button>

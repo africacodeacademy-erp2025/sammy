@@ -41,56 +41,58 @@ export default function Home() {
           <div className="absolute top-0 left-0 w-96 h-96 bg-purple-700/20 rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-600/20 rounded-full blur-2xl animate-pulse" />
         </div>
-        <div className="flex-1 flex flex-col gap-8 z-10">
-          <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight drop-shadow-xl">
-            <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              SaMMy
-            </span>
-            <span className="block text-2xl sm:text-3xl font-bold mt-2 text-gray-200">
-              AI Powered Social Media Manager
-            </span>
-          </h1>
-          <p className="text-gray-300 text-xl sm:text-2xl max-w-2xl leading-relaxed">
-            Effortlessly create, schedule, and post engaging content across all
-            your platforms.{" "}
-            <span className="text-purple-300 font-semibold">
-              Grow your brand
-            </span>{" "}
-            with the power of AI.
-          </p>
-          <div className="flex gap-4 mt-6">
-            {!hasToken ? (
-              <>
+        <div className="max-w-7xl mx-auto w-full flex flex-col md:flex-row items-center justify-between gap-10 z-10">
+          <div className="flex-1 flex flex-col gap-8">
+            <h1 className="text-5xl sm:text-6xl font-extrabold text-white leading-tight drop-shadow-xl">
+              <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                SaMMy
+              </span>
+              <span className="block text-2xl sm:text-3xl font-bold mt-2 text-gray-200">
+                AI Powered Social Media Manager
+              </span>
+            </h1>
+            <p className="text-gray-300 text-xl sm:text-2xl max-w-2xl leading-relaxed">
+              Effortlessly create, schedule, and post engaging content across
+              all your platforms.{" "}
+              <span className="text-purple-300 font-semibold">
+                Grow your brand
+              </span>{" "}
+              with the power of AI.
+            </p>
+            <div className="flex gap-4 mt-6">
+              {!hasToken ? (
+                <>
+                  <button
+                    onClick={() => setView("login")}
+                    className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => setView("register")}
+                    className="px-6 py-2 rounded-3xl border-2 border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white transition-all font-bold text-base shadow-lg"
+                  >
+                    Register
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={() => setView("login")}
-                  className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
+                  className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-2 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all font-bold text-base shadow-lg flex items-center justify-center min-w-[120px]"
+                  onClick={handleContinue}
                 >
-                  Login
+                  Continue
                 </button>
-                <button
-                  onClick={() => setView("register")}
-                  className="px-6 py-2 rounded-3xl border-2 border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white transition-all font-bold text-base shadow-lg"
-                >
-                  Register
-                </button>
-              </>
-            ) : (
-              <button
-                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-2 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all font-bold text-base shadow-lg flex items-center justify-center min-w-[120px]"
-                onClick={handleContinue}
-              >
-                Continue
-              </button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex-1 flex justify-center items-center z-10">
-          <img
-            src="/SHome.jpg"
-            alt="SaMMy AI Bot"
-            className="w-80 md:w-96 rounded-2xl shadow-2xl border-4 border-purple-700/30"
-          />
+          <div className="flex-1 flex justify-center items-center">
+            <img
+              src="/SHome.jpg"
+              alt="SaMMy AI Bot"
+              className="w-80 md:w-96 rounded-2xl shadow-2xl border-4 border-purple-700/30"
+            />
+          </div>
         </div>
       </section>
 
@@ -98,7 +100,7 @@ export default function Home() {
       {!hasToken && view !== "home" && (
         <div
           ref={formRef}
-          className="px-6 md:px-20 py-16 mb-20 max-w-xl mx-auto flex flex-col gap-8 bg-gray-900/80 rounded-2xl shadow-2xl border border-purple-700/30"
+          className="px-6 md:px-20 py-16 mb-20 max-w-xl mx-auto flex flex-col gap-8"
         >
           {view === "login" && (
             <Login
@@ -116,89 +118,99 @@ export default function Home() {
       )}
 
       {/* Features Section */}
-      <section className="py-20 px-6 md:px-20 bg-gradient-to-br from-gray-900/60 via-purple-900/40 to-blue-900/30 backdrop-blur-xl">
-        <h2 className="text-4xl font-extrabold mb-16 text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg">
-          Features
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          <div className="flex flex-col gap-6 items-center text-center bg-gray-950/80 rounded-2xl p-8 shadow-xl border border-purple-700/20 hover:scale-105 transition-transform">
-            <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 mb-4">
-              <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-                <path
-                  fill="white"
-                  d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M6.05 17.95l-1.414 1.414m12.728 0l-1.414-1.414M6.05 6.05L4.636 4.636"
-                />
-                <circle cx="12" cy="12" r="5" stroke="white" strokeWidth="2" />
-              </svg>
+      <section className="py-20 px-6 md:px-20 bg-gray-950">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-4xl font-extrabold mb-16 text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg">
+            Features
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div className="flex flex-col gap-6 items-center text-center bg-gray-800/50 rounded-2xl p-8 shadow-xl border border-gray-700/50 hover:scale-105 transition-transform">
+              <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 mb-4">
+                <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
+                  <path
+                    fill="white"
+                    d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364-6.364l-1.414 1.414M6.05 17.95l-1.414 1.414m12.728 0l-1.414-1.414M6.05 6.05L4.636 4.636"
+                  />
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="5"
+                    stroke="white"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </div>
+              <h3 className="font-bold text-2xl">AI Content Generation</h3>
+              <p className="text-gray-300 text-base leading-relaxed">
+                Generate engaging posts, tweets, and threads using AI tailored
+                for your audience. Save time and boost creativity.
+              </p>
             </div>
-            <h3 className="font-bold text-2xl">AI Content Generation</h3>
-            <p className="text-gray-300 text-base leading-relaxed">
-              Generate engaging posts, tweets, and threads using AI tailored for
-              your audience. Save time and boost creativity.
-            </p>
-          </div>
-          <div className="flex flex-col gap-6 items-center text-center bg-gray-950/80 rounded-2xl p-8 shadow-xl border border-purple-700/20 hover:scale-105 transition-transform">
-            <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-4">
-              <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-                <path
-                  fill="white"
-                  d="M17 2a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10zm-1 2H8v16h8V4zm-4 8v4m0-4h2m-2 0H9"
-                />
-              </svg>
+            <div className="flex flex-col gap-6 items-center text-center bg-gray-800/50 rounded-2xl p-8 shadow-xl border border-gray-700/50 hover:scale-105 transition-transform">
+              <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-4">
+                <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
+                  <path
+                    fill="white"
+                    d="M17 2a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10zm-1 2H8v16h8V4zm-4 8v4m0-4h2m-2 0H9"
+                  />
+                </svg>
+              </div>
+              <h3 className="font-bold text-2xl">Schedule & Automate</h3>
+              <p className="text-gray-300 text-base leading-relaxed">
+                Plan your content ahead of time and post automatically across
+                platforms. Never miss a moment.
+              </p>
             </div>
-            <h3 className="font-bold text-2xl">Schedule & Automate</h3>
-            <p className="text-gray-300 text-base leading-relaxed">
-              Plan your content ahead of time and post automatically across
-              platforms. Never miss a moment.
-            </p>
-          </div>
-          <div className="flex flex-col gap-6 items-center text-center bg-gray-950/80 rounded-2xl p-8 shadow-xl border border-purple-700/20 hover:scale-105 transition-transform">
-            <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-pink-500 mb-4">
-              <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
-                <path
-                  fill="white"
-                  d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 14.93V17a1 1 0 0 1-2 0v-2.07a8.001 8.001 0 0 1-6.93-6.93H7a1 1 0 0 1 0-2H4.07A8.001 8.001 0 0 1 12 4.07V7a1 1 0 0 1 2 0v2.93a8.001 8.001 0 0 1 6.93 6.93H17a1 1 0 0 1 0 2h2.93A8.001 8.001 0 0 1 13 16.93z"
-                />
-              </svg>
+            <div className="flex flex-col gap-6 items-center text-center bg-gray-800/50 rounded-2xl p-8 shadow-xl border border-gray-700/50 hover:scale-105 transition-transform">
+              <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-pink-500 mb-4">
+                <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
+                  <path
+                    fill="white"
+                    d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 14.93V17a1 1 0 0 1-2 0v-2.07a8.001 8.001 0 0 1-6.93-6.93H7a1 1 0 0 1 0-2H4.07A8.001 8.001 0 0 1 12 4.07V7a1 1 0 0 1 2 0v2.93a8.001 8.001 0 0 1 6.93 6.93H17a1 1 0 0 1 0 2h2.93A8.001 8.001 0 0 1 13 16.93z"
+                  />
+                </svg>
+              </div>
+              <h3 className="font-bold text-2xl">Multi-Platform Integration</h3>
+              <p className="text-gray-300 text-base leading-relaxed">
+                Connect Slack, Twitter/X, and Facebook accounts. Let SaMMy
+                manage everything with just a single prompt.
+              </p>
             </div>
-            <h3 className="font-bold text-2xl">Multi-Platform Integration</h3>
-            <p className="text-gray-300 text-base leading-relaxed">
-              Connect Slack, Twitter/X, and Facebook accounts. Let SaMMy manage
-              everything with just a single prompt.
-            </p>
           </div>
         </div>
       </section>
 
       {/* Call to Action */}
-      <section className="py-20 px-6 md:px-20 flex flex-col items-center text-center gap-8 bg-gradient-to-r from-purple-900/60 via-blue-900/40 to-gray-900/30">
-        <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg">
-          Get Started Today
-        </h2>
-        <p className="text-gray-300 max-w-xl text-lg leading-relaxed">
-          Experience effortless social media management with{" "}
-          <span className="font-bold text-purple-300">SaMMy</span>. Sign up now
-          and transform your online presence with the power of AI.
-        </p>
-        {!hasToken && (
-          <div className="flex gap-6 mt-4">
-            <button
-              onClick={() => setView("register")}
-              className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
-            >
-              Register
-            </button>
-            <button
-              onClick={() => setView("login")}
-              className="px-6 py-2 rounded-3xl border-2 border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white transition-all font-bold text-base shadow-lg"
-            >
-              Login
-            </button>
-          </div>
-        )}
+      <section className="py-20 px-6 md:px-20 flex flex-col items-center text-center gap-8 bg-gray-900">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg">
+            Get Started Today
+          </h2>
+          <p className="text-gray-300 max-w-xl text-lg leading-relaxed">
+            Experience effortless social media management with{" "}
+            <span className="font-bold text-purple-300">SaMMy</span>. Sign up
+            now and transform your online presence with the power of AI.
+          </p>
+          {!hasToken && (
+            <div className="flex gap-6 mt-4">
+              <button
+                onClick={() => setView("register")}
+                className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
+              >
+                Register
+              </button>
+              <button
+                onClick={() => setView("login")}
+                className="px-6 py-2 rounded-3xl border-2 border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white transition-all font-bold text-base shadow-lg"
+              >
+                Login
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
-      <footer className="p-8 text-center text-gray-400 border-t border-purple-700/30 bg-gray-950/80 mt-auto flex flex-col items-center gap-4">
+      <footer className="p-8 text-center text-gray-400 border-t border-gray-700/50 bg-gray-950 mt-auto flex flex-col items-center gap-4">
         <div className="flex gap-6 justify-center mb-2">
           <a
             href="https://www.facebook.com/share/1BAr6jwHjh/"

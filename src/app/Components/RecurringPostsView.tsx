@@ -1,5 +1,14 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import {
+  ChevronLeft,
+  RotateCw,
+  Clock,
+  Edit,
+  Trash2,
+  Play,
+  Pause,
+} from "lucide-react";
 import RecurrenceModal, { RecurrenceSettings } from "./RecurrenceModal";
 
 export interface RecurringPost {
@@ -202,7 +211,7 @@ export default function RecurringPostsView({
 
   const formatNextOccurrence = (timestamp: string) => {
     const date = new Date(timestamp);
-    
+
     // Format in local time
     return date.toLocaleString("en-US", {
       weekday: "short",
@@ -213,7 +222,8 @@ export default function RecurringPostsView({
       minute: "2-digit",
       hour12: true,
     });
-  };  const getFrequencyLabel = (post: RecurringPost) => {
+  };
+  const getFrequencyLabel = (post: RecurringPost) => {
     if (post.frequency === "daily" && post.selectedDays) {
       const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const days = post.selectedDays.map((d) => dayNames[d]).join(", ");
@@ -256,17 +266,18 @@ export default function RecurringPostsView({
   return (
     <div className="flex flex-col h-screen w-full bg-gray-950">
       {/* Header */}
-      <div className="p-4 bg-gradient-to-r from-gray-900 to-gray-800 border-b border-gray-700/50">
+      <div className="p-4 bg-gray-950 border-b border-gray-700/50">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors"
+            className="p-2 rounded-lg text-white hover:bg-gray-700/50 transition-colors"
           >
-            ←
+            <ChevronLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="font-bold text-white text-sm md:text-base">
-              🔄 Recurring Posts
+            <h1 className="font-bold text-white text-sm md:text-base flex items-center gap-2">
+              <RotateCw className="w-5 h-5" />
+              Recurring Posts
             </h1>
             <p className="text-xs text-white/60">
               Manage your automated posting schedules
@@ -276,11 +287,11 @@ export default function RecurringPostsView({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-900/30 to-gray-900/10">
-        <div className="p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto bg-gray-950">
+        <div className="max-w-5xl mx-auto p-4 md:p-6">
           {recurringPosts.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-60 text-center">
-              <div className="text-6xl mb-6">🔄</div>
+              <RotateCw className="w-16 h-16 text-gray-500 mb-4" />
               <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
                 No Recurring Posts Yet
               </h3>
@@ -387,31 +398,44 @@ export default function RecurringPostsView({
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => handleTogglePause(post)}
-                      className={`px-4 py-2 text-sm rounded-lg font-medium transition-all ${
+                      className={`px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center gap-2 ${
                         post.isActive
-                          ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30"
-                          : "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+                          ? "text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/20"
+                          : "text-green-400 border border-green-500/30 hover:bg-green-500/20"
                       }`}
                     >
-                      {post.isActive ? "⏸ Pause" : "▶ Resume"}
+                      {post.isActive ? (
+                        <>
+                          <Pause className="w-4 h-4" />
+                          Pause
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          Resume
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => handleEditPrompt(post)}
-                      className="px-4 py-2 text-sm rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 font-medium transition-all"
+                      className="px-4 py-2 text-sm rounded-lg text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 font-medium transition-all flex items-center gap-2"
                     >
-                      ✏️ Edit Prompt
+                      <Edit className="w-4 h-4" />
+                      Edit Prompt
                     </button>
                     <button
                       onClick={() => handleEditTime(post)}
-                      className="px-4 py-2 text-sm rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 hover:bg-purple-500/30 font-medium transition-all"
+                      className="px-4 py-2 text-sm rounded-lg text-purple-400 border border-purple-500/30 hover:bg-purple-500/20 font-medium transition-all flex items-center gap-2"
                     >
-                      🕒 Edit Schedule
+                      <Clock className="w-4 h-4" />
+                      Edit Schedule
                     </button>
                     <button
                       onClick={() => handleDelete(post._id)}
-                      className="px-4 py-2 text-sm rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 font-medium transition-all"
+                      className="px-4 py-2 text-sm rounded-lg text-red-400 border border-red-500/30 hover:bg-red-500/20 font-medium transition-all flex items-center gap-2"
                     >
-                      🗑️ Delete
+                      <Trash2 className="w-4 h-4" />
+                      Delete
                     </button>
                   </div>
                 </div>

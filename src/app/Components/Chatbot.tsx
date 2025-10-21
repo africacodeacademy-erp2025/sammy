@@ -2,6 +2,7 @@
 // Icons handled within ProfileMenu component
 import Image from "next/image";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { History, Trash2, Send, Menu } from "lucide-react";
 import MessageBubble from "../Components/MessageBubble";
 import { Message } from "../Types";
 import CredentialsSidebar from "./CredentialsSidebar";
@@ -10,6 +11,7 @@ import ScheduledPostView from "./ScheduledPostsView";
 import Sidebar from "./Sidebar";
 import ProfileMenu from "./UI/ProfileMenu";
 import RecurrenceModal, { RecurrenceSettings } from "./RecurrenceModal";
+import HistoryModal from "./HistoryModal";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -23,6 +25,12 @@ export default function ChatBot() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [view, setView] = useState<"chat" | "schedule">("chat");
   const [hasRequiredCredentials, setHasRequiredCredentials] = useState(false);
+
+  // Chat History State
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Recurrence Modal State
   const [recurrenceModalOpen, setRecurrenceModalOpen] = useState(false);
@@ -114,6 +122,129 @@ export default function ChatBot() {
     []
   );
 
+  // Generate a unique threadId for new conversations
+  const generateThreadId = useCallback(() => {
+    return `thread_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 11)}`;
+  }, []);
+
+  // Save conversation to chat history
+  const saveConversation = useCallback(
+    async (threadId: string, messageList: Message[]) => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        // Extract platform from messages (if any)
+        const platformMessage = messageList.find((m) => m.platform);
+        const platform = platformMessage?.platform;
+
+        await fetch("/api/chat-history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            threadId,
+            messages: messageList,
+            platform,
+          }),
+        });
+
+        console.log(
+          `💾 Conversation saved: ${threadId} (${messageList.length} messages)`
+        );
+      } catch (err) {
+        console.error("Failed to save conversation:", err);
+        // Don't show error to user - auto-save failures should be silent
+      }
+    },
+    []
+  );
+
+  // Fetch conversation history list
+  const fetchConversations = useCallback(async () => {
+    try {
+      setLoadingHistory(true);
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch("/api/chat-history", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConversations(data.conversations || []);
+        console.log(
+          `📚 Loaded ${data.conversations?.length || 0} conversations`
+        );
+      }
+    } catch (err) {
+      console.error("Failed to fetch conversations:", err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  // Load a specific conversation
+  const loadConversation = useCallback(async (threadId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch(`/api/chat-history?threadId=${threadId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.conversation) {
+          setMessages(data.conversation.messages);
+          setCurrentThreadId(threadId);
+          setHistoryModalOpen(false);
+          console.log(
+            `📖 Loaded conversation: ${threadId} (${data.conversation.messages.length} messages)`
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load conversation:", err);
+    }
+  }, []);
+
+  // Delete a conversation
+  const deleteConversation = useCallback(async (threadId: string) => {
+    if (!confirm("Are you sure you want to delete this conversation?")) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch(`/api/chat-history?threadId=${threadId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        setConversations((prev) => prev.filter((c) => c.threadId !== threadId));
+        console.log(`🗑️ Deleted conversation: ${threadId}`);
+      }
+    } catch (err) {
+      console.error("Failed to delete conversation:", err);
+    }
+  }, []);
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userInput = input.trim();
@@ -127,13 +258,24 @@ export default function ChatBot() {
 
       const token = localStorage.getItem("token");
 
+      // Generate threadId for new conversations (first message)
+      let threadId = currentThreadId;
+      if (!threadId) {
+        threadId = generateThreadId();
+        setCurrentThreadId(threadId);
+        console.log(`🆕 New conversation started: ${threadId}`);
+      }
+
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ prompt: userInput }),
+        body: JSON.stringify({
+          prompt: userInput,
+          threadId, // Pass threadId for context
+        }),
       });
       const data = await res.json();
 
@@ -148,25 +290,59 @@ export default function ChatBot() {
 
       // Handle different response types
       if (data.greeting) {
-        addMessage({
-          sender: "ai",
+        const aiMessage = {
+          sender: "ai" as const,
           content: data.message,
           // No status for greetings - they don't need action buttons
-        });
+        };
+        addMessage(aiMessage);
+
+        // Auto-save conversation after AI response
+        if (threadId) {
+          // Wait a bit for state to update, then save
+          setTimeout(() => {
+            setMessages((currentMessages) => {
+              saveConversation(threadId, currentMessages);
+              return currentMessages;
+            });
+          }, 100);
+        }
       } else if (data.recurrence) {
         // Handle recurrence - show modal with converted time
         setRecurrenceData(data.recurrenceData);
         setRecurrenceModalOpen(true);
-        addMessage({
-          sender: "ai",
+        const aiMessage = {
+          sender: "ai" as const,
           content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
-        });
+        };
+        addMessage(aiMessage);
+
+        // Auto-save conversation
+        if (threadId) {
+          setTimeout(() => {
+            setMessages((currentMessages) => {
+              saveConversation(threadId, currentMessages);
+              return currentMessages;
+            });
+          }, 100);
+        }
       } else if (data.scheduled) {
-        addMessage({
-          sender: "ai",
+        const aiMessage = {
+          sender: "ai" as const,
           content: data.message,
-          status: "scheduled",
-        });
+          status: "scheduled" as const,
+        };
+        addMessage(aiMessage);
+
+        // Auto-save conversation
+        if (threadId) {
+          setTimeout(() => {
+            setMessages((currentMessages) => {
+              saveConversation(threadId, currentMessages);
+              return currentMessages;
+            });
+          }, 100);
+        }
       } else {
         // Check if user has credentials for the platform
         if (data.review?.hasCredentials === false) {
@@ -177,20 +353,42 @@ export default function ChatBot() {
               : data.review?.platform === "facebook"
               ? "Facebook"
               : data.review?.platform;
-          addMessage({
-            sender: "ai",
+          const aiMessage = {
+            sender: "ai" as const,
             content: `${data.review?.post}\n\n🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
             // No status - no action buttons since they can't post
-          });
+          };
+          addMessage(aiMessage);
+
+          // Auto-save conversation
+          if (threadId) {
+            setTimeout(() => {
+              setMessages((currentMessages) => {
+                saveConversation(threadId, currentMessages);
+                return currentMessages;
+              });
+            }, 100);
+          }
         } else {
           // User has credentials - show normal pending status with action buttons
-          addMessage({
-            sender: "ai",
+          const aiMessage = {
+            sender: "ai" as const,
             content: data.review?.post || data.message,
-            status: "pending",
+            status: "pending" as const,
             threadId: data.review?.threadId,
             platform: data.review?.platform,
-          });
+          };
+          addMessage(aiMessage);
+
+          // Auto-save conversation
+          if (threadId) {
+            setTimeout(() => {
+              setMessages((currentMessages) => {
+                saveConversation(threadId, currentMessages);
+                return currentMessages;
+              });
+            }, 100);
+          }
         }
       }
     } catch (err: unknown) {
@@ -198,11 +396,22 @@ export default function ChatBot() {
         err instanceof Error
           ? err.message
           : "Sorry, I encountered an error processing your request.";
-      addMessage({
-        sender: "ai",
+      const aiMessage = {
+        sender: "ai" as const,
         content: message,
-        status: "error",
-      });
+        status: "error" as const,
+      };
+      addMessage(aiMessage);
+
+      // Auto-save conversation even on errors
+      if (currentThreadId) {
+        setTimeout(() => {
+          setMessages((currentMessages) => {
+            saveConversation(currentThreadId, currentMessages);
+            return currentMessages;
+          });
+        }, 100);
+      }
     } finally {
       setLoading(false);
       setIsTyping(false);
@@ -374,6 +583,8 @@ export default function ChatBot() {
   const clearChat = () => {
     if (confirm("Are you sure you want to clear the conversation?")) {
       setMessages([]);
+      setCurrentThreadId(null); // Reset thread ID for new conversation
+      console.log("🗑️ Chat cleared - ready for new conversation");
     }
   };
 
@@ -460,165 +671,195 @@ export default function ChatBot() {
         />
       )}
 
+      {/* History Modal */}
+      <HistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        conversations={conversations}
+        loadingHistory={loadingHistory}
+        onLoadConversation={loadConversation}
+        onDeleteConversation={deleteConversation}
+      />
+
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col relative transition-all duration-300">
         {/* Header (fixed) */}
-        <div className="fixed top-0 left-0 w-full z-30 p-4 bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border-b border-gray-700/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
-              <Image
-                src="/SaMMy.png"
-                alt="Logo"
-                fill
-                style={{ objectFit: "cover" }}
-              />
+        <div className="fixed top-0 left-0 w-full z-30 bg-gray-950 border-b border-gray-700/50">
+          <div className="max-w-[1600px] mx-auto p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center relative">
+                <Image
+                  src="/SaMMy.png"
+                  alt="Logo"
+                  fill
+                  style={{ objectFit: "cover" }}
+                />
+              </div>
+              <div>
+                <h1 className="font-bold text-white text-sm sm:text-base">
+                  SaMMy
+                </h1>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-white text-sm sm:text-base">
-                SaMMy
-              </h1>
-              <p className="text-xs text-white/60">Social Media AI Agent</p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-3">
-            {messages.length > 0 && (
+            <div className="flex items-center gap-3">
+              {/* History Button */}
               <button
-                onClick={clearChat}
-                className="text-xs px-3 py-1.5 rounded-lg bg-rose-700/50 text-white hover:bg-rose-700 transition-colors"
+                onClick={() => {
+                  setHistoryModalOpen(true);
+                  fetchConversations();
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg text-white hover:bg-gray-700/50 transition-colors flex items-center gap-2"
+                title="Chat History"
               >
-                Clear
+                <History className="w-4 h-4" />
+                <span className="hidden sm:inline">History</span>
               </button>
-            )}
 
-            {/* User Profile Dropdown */}
-            {userEmail && (
-              <ProfileMenu
-                email={userEmail}
-                open={profileDropdownOpen}
-                onToggle={toggleProfileDropdown}
-                onProfileSettings={handleProfileSettings}
-                onLogout={handleLogout}
-              />
-            )}
+              {messages.length > 0 && (
+                <button
+                  onClick={clearChat}
+                  className="text-xs px-3 py-1.5 rounded-lg text-white hover:bg-gray-700/50 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Clear</span>
+                </button>
+              )}
 
-            <button
-              onClick={toggleSidebar}
-              className="px-3 py-1.5 rounded-lg bg-gray-700/50 text-white hover:bg-gray-700 transition-colors flex items-center justify-center"
-            >
-              <span className="text-sm">◧</span>
-            </button>
+              {/* Sidebar Menu Button */}
+              <button
+                onClick={toggleSidebar}
+                className="px-3 py-1.5 rounded-lg text-white hover:bg-gray-700/50 transition-colors flex items-center justify-center"
+                title="Menu"
+              >
+                <Menu className="w-4 h-4" />
+              </button>
+
+              {/* User Profile Dropdown */}
+              {userEmail && (
+                <ProfileMenu
+                  email={userEmail}
+                  open={profileDropdownOpen}
+                  onToggle={toggleProfileDropdown}
+                  onProfileSettings={handleProfileSettings}
+                  onLogout={handleLogout}
+                />
+              )}
+            </div>
           </div>
         </div>
 
         {/* Messages Container */}
-        <div className="flex-1 flex flex-col overflow-y-auto overscroll-y-contain p-4 pt-[80px] pb-40 sm:pb-44 scroll-pb-32 bg-gradient-to-b from-gray-900/30 to-gray-900/10">
-          {messages.length === 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-white/60">
-              <div className="text-center max-w-md mb-8">
-                <h2 className="text-xl sm:text-2xl font-extrabold mb-4">
-                  What do you want to post about?
-                </h2>
-                <div className="p-4 rounded-xl text-left backdrop-blur-sm">
-                  <p className="text-xs font-medium mb-2 text-gray-400">
-                    Try asking me:
-                  </p>
-                  <ul className="text-xs space-y-1 text-gray-400">
-                    <li>
-                      • &quot;Hello!&quot; or &quot;What can you do?&quot;
-                    </li>
-                    <li>
-                      • &quot;Create a tweet about launching our new
-                      branch&quot;
-                    </li>
-                    <li>
-                      • &quot;Write a facebook post about our opened
-                      intake&quot;
-                    </li>
-                    <li>
-                      • &quot;Draft a twitter post for tomorrow at 2pm&quot;
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              onApprove={handleApproveDraft}
-              onReject={handleRejectDraft}
-              isLatestAiMessage={msg.id === latestAiMessageId}
-              onAttachmentsChange={handleAttachmentsChange}
-            />
-          ))}
-
-          {isTyping && (
-            <div className="flex justify-start mt-3 mb-4">
-              <div className="max-w-full sm:max-w-[80%] rounded-2xl p-3 bg-gray-800/80 text-white backdrop-blur-sm border border-gray-700/50">
-                <div className="flex items-center gap-2 text-white/70">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce"></div>
-                    <div
-                      className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
-                      style={{ animationDelay: "0.4s" }}
-                    ></div>
+        <div className="flex-1 flex flex-col overflow-y-auto overscroll-y-contain p-4 pt-[80px] pb-40 sm:pb-44 scroll-pb-32 bg-gray-950">
+          <div className="max-w-[1200px] mx-auto w-full">
+            {messages.length === 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] text-white/60">
+                <div className="text-center max-w-md mb-8">
+                  <h2 className="text-xl sm:text-2xl font-extrabold mb-4">
+                    What do you want to post about?
+                  </h2>
+                  <div className="p-4 rounded-xl text-left backdrop-blur-sm">
+                    <p className="text-xs font-medium mb-2 text-gray-400">
+                      Try asking me:
+                    </p>
+                    <ul className="text-xs space-y-1 text-gray-400">
+                      <li>
+                        • &quot;Hello!&quot; or &quot;What can you do?&quot;
+                      </li>
+                      <li>
+                        • &quot;Create a tweet about launching our new
+                        branch&quot;
+                      </li>
+                      <li>
+                        • &quot;Write a facebook post about our opened
+                        intake&quot;
+                      </li>
+                      <li>
+                        • &quot;Draft a twitter post for tomorrow at 2pm&quot;
+                      </li>
+                    </ul>
                   </div>
-                  <span className="text-sm">SaMMy is thinking...</span>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
-          <div className="fixed bottom-0 left-0 w-full h-64 sm:h-72 bg-gradient-to-t from-gray-950 via-gray-950/90 via-gray-950/50 to-transparent pointer-events-none z-0 sm:z-0" />
+            {messages.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                onApprove={handleApproveDraft}
+                onReject={handleRejectDraft}
+                isLatestAiMessage={msg.id === latestAiMessageId}
+                onAttachmentsChange={handleAttachmentsChange}
+              />
+            ))}
+
+            {isTyping && (
+              <div className="flex justify-start mt-3 mb-4">
+                <div className="max-w-full sm:max-w-[80%] rounded-2xl p-3 bg-gray-800/80 text-white backdrop-blur-sm border border-gray-700/50">
+                  <div className="flex items-center gap-2 text-white/70">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-white/50 rounded-full animate-bounce"></div>
+                      <div
+                        className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-white/50 rounded-full animate-bounce"
+                        style={{ animationDelay: "0.4s" }}
+                      ></div>
+                    </div>
+                    <span className="text-sm">SaMMy is thinking...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
-        {/* Input Area */}
-        <div className="w-full max-w-full sm:max-w-2xl fixed bottom-0 left-1/2 transform -translate-x-1/2 px-2 pb-[calc(1.5rem+env(safe-area-inset-bottom))] z-20">
-          <div className="flex flex-row items-end gap-2 w-full">
-            <textarea
-              ref={textareaRef}
-              className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px] text-left"
-              placeholder={
-                hasRequiredCredentials
-                  ? "Instruct SaMMy..."
-                  : "Instruct SaMMy... (configure sources for curated posts)"
-              }
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-              style={{
-                touchAction: "manipulation",
-                lineHeight: "1.5",
-                paddingTop: "0.75rem",
-                paddingBottom: "0.75rem",
-              }}
-            />
+        {/* Input Area - Full Width Background */}
+        <div className="fixed bottom-0 left-0 w-full z-20 bg-gray-950">
+          <div className="max-w-[1200px] mx-auto px-2 sm:px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
+            <div className="flex flex-row items-end gap-2 w-full">
+              <textarea
+                ref={textareaRef}
+                className="flex-1 rounded-3xl px-4 py-3 resize-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm bg-gray-900 text-white placeholder-white/60 min-h-[48px] text-left"
+                placeholder={
+                  hasRequiredCredentials
+                    ? "Instruct SaMMy..."
+                    : "Instruct SaMMy... (connect platforms)"
+                }
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+                style={{
+                  touchAction: "manipulation",
+                  lineHeight: "1.5",
+                  paddingTop: "0.75rem",
+                  paddingBottom: "0.75rem",
+                }}
+              />
 
-            <button
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 sm:px-4 py-3 min-h-[48px] rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[70px] sm:min-w-[90px]"
-              disabled={loading || !input.trim()}
-              onClick={sendMessage}
-              style={{ touchAction: "manipulation" }}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <div className="flex items-center gap-1">
-                  <span className="text-sm">Send</span>
-                  <span className="text-xs">⏎</span>
-                </div>
-              )}
-            </button>
+              <button
+                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 sm:px-4 py-3 min-h-[48px] rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[70px] sm:min-w-[90px]"
+                disabled={loading || !input.trim()}
+                onClick={sendMessage}
+                style={{ touchAction: "manipulation" }}
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4" />
+                    <span className="text-sm hidden sm:inline">Send</span>
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

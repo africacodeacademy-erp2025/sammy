@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { Twitter, Facebook, MessageSquare, Shield, X } from "lucide-react";
 import Badge from "./UI/Badge";
 import Separator from "./UI/Separator";
 import Button from "./UI/Button";
@@ -303,12 +304,21 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
       (message.includes("Successfully") || message.includes("connected"));
     const messageColor = isSuccess ? "text-green-400" : "text-red-400";
 
+    // Get platform icon
+    const PlatformIcon =
+      platform === "twitter"
+        ? Twitter
+        : platform === "facebook"
+        ? Facebook
+        : MessageSquare;
+
     return (
       <Card>
         <CardHeader>
           <CardTitle
             className={`flex items-center gap-2 ${titleColor} text-sm sm:text-base`}
           >
+            <PlatformIcon className="w-5 h-5" />
             {config.name}{" "}
             <Badge
               className={`${badgeColor} ${config.color} text-xs sm:text-sm`}
@@ -322,14 +332,24 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
 
           {isConnected ? (
             <div
-              className="w-full bg-gray-800 rounded p-4 text-center border border-gray-700"
+              className="w-full bg-gray-800/50 rounded-lg p-4 text-center border border-gray-700/50"
               role="status"
               aria-label={`${config.name} connected successfully`}
             >
               <div className="flex items-center justify-center gap-2">
-                <span className="text-xl" aria-hidden="true">
-                  ✓
-                </span>
+                <svg
+                  className="w-5 h-5 text-green-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
                 <span
                   className={`${connectedColor} font-semibold text-sm sm:text-base`}
                 >
@@ -374,42 +394,31 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-gray-900 border-l border-gray-700 z-50
+        className={`fixed top-0 right-0 h-full w-full sm:w-96 bg-gray-900 border-l border-gray-700/50 z-50
         transform transition-transform duration-300 shadow-2xl overflow-y-auto
         ${isOpen ? "translate-x-0" : "translate-x-full"}`}
         aria-label="Platform Credentials"
         role="complementary"
       >
         {/* Header */}
-        <header className="p-6 border-b border-gray-700 flex items-center justify-between sticky top-0 bg-gray-900 z-10">
+        <header className="p-6 border-b border-gray-700/50 flex items-center justify-between sticky top-0 bg-gray-950 z-10">
           <h2 className="text-xl font-bold text-white">Platform Connections</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700/50"
             aria-label="Close sidebar"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            <X className="w-5 h-5" />
           </button>
         </header>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 bg-gray-950">
           {/* Info Banner */}
-          <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4">
-            <h3 className="text-sm font-semibold text-white mb-2">
-              🔐 Secure OAuth 2.0 Authentication
+          <div className="bg-gray-800/50 rounded-lg border border-gray-700/50 p-4">
+            <h3 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-green-400" />
+              Secure OAuth 2.0 Authentication
             </h3>
             <p className="text-xs text-gray-400 leading-relaxed">
               All platforms use secure OAuth 2.0. Your credentials are encrypted
