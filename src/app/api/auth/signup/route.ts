@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../../lib/mongo";
 import { hashPassword, signJwt } from "../../../../..//lib/auth";
+import { getNextUserId } from "../../../../../lib/userHelpers";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,20 +34,32 @@ export async function POST(req: NextRequest) {
     }
 
     const passwordHash = await hashPassword(password);
+    
+    // Get next user ID (starts from 2, since 1 is admin)
+    const userId = await getNextUserId();
 
     const newUser = {
+      userId, // Sequential user ID
       email: email.toLowerCase(),
       passwordHash,
+      password: passwordHash, // For compatibility
+      role: 'user' as const, // Default role is 'user'
+      permissions: [] as string[], // No special permissions by default
       name: name ?? null,
       createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      lastLogin: null,
     };
 
     const result = await users.insertOne(newUser);
 
     const userForClient = {
       _id: result.insertedId,
+      userId: newUser.userId,
       email: newUser.email,
       name: newUser.name,
+      role: newUser.role,
       createdAt: newUser.createdAt,
     };
 
@@ -56,10 +69,11 @@ export async function POST(req: NextRequest) {
       { success: true, token, user: userForClient },
       { status: 201 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Signup error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json(
-      { success: false, error: err?.message ?? "Internal Server Error" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

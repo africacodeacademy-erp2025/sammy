@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { saveFacebookConfig } from "../../../../../../lib/integrations/facebook";
 import { connectDB } from "../../../../../../lib/mongo";
 import { ObjectId } from "mongodb";
+import { Db } from "mongodb";
 
 interface FacebookPost {
   id: string;
   message?: string;
-  from?: any;
+  from?: {
+    name?: string;
+    id?: string;
+  };
+}
+
+interface FacebookPage {
+  id: string;
+  name: string;
+  access_token: string;
 }
 
 interface PastPostDocument {
@@ -93,10 +103,10 @@ async function fetchRecentFacebookPosts(
 }
 
 async function filterExistingPosts(
-  db: any,
+  db: Db,
   posts: FacebookPost[]
 ): Promise<FacebookPost[]> {
-  const collection = db.collection("past_posts");
+  const collection = db.collection<{ postId: string }>("past_posts");
   const postIds = posts.map((p) => p.id);
 
   const existingIdsDocs = await collection
@@ -105,14 +115,14 @@ async function filterExistingPosts(
     .toArray();
 
   const existingIdSet = new Set(
-    existingIdsDocs.map((d: { postId: string }) => d.postId)
+    existingIdsDocs.map((d) => d.postId)
   );
   return posts.filter((p) => !existingIdSet.has(p.id));
 }
 
 async function generateEmbeddings(
   posts: FacebookPost[],
-  OpenAI: any
+  OpenAI: typeof import('openai').default
 ): Promise<Map<string, number[]>> {
   const embeddingMap = new Map<string, number[]>();
   const postsWithMessages = posts.filter(
@@ -128,7 +138,7 @@ async function generateEmbeddings(
     input: messages,
   });
 
-  const embeddings = response.data.map((d: any) => d.embedding);
+  const embeddings = response.data.map((d) => d.embedding);
   postsWithMessages.forEach((post, i) => {
     embeddingMap.set(post.id, embeddings[i]);
   });
@@ -152,7 +162,7 @@ function createPostDocuments(
 }
 
 async function savePostsToDatabase(
-  db: any,
+  db: Db,
   documents: PastPostDocument[]
 ): Promise<void> {
   const collection = db.collection("past_posts");
@@ -285,7 +295,7 @@ export async function GET(req: NextRequest) {
     await saveFacebookConfig(userId, {
       pageId,
       accessToken: pageAccessToken,
-      pages: pages.map((p: any) => ({
+      pages: pages.map((p: FacebookPage) => ({
         id: p.id,
         name: p.name,
         accessToken: p.access_token,

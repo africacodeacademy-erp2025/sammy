@@ -31,7 +31,18 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
       if (!res.ok) throw new Error(data.error || "Login failed");
 
       localStorage.setItem("token", data.token);
-      router.push("/chatbot");
+      
+      // Check if user is admin to determine redirect
+      const user = data.user;
+      const isAdmin = user?.role === 'admin' || user?.userId === 1;
+      
+      if (isAdmin) {
+        // Admin users see dashboard selection page
+        router.push("/dashboard-select");
+      } else {
+        // Regular users go directly to chatbot
+        router.push("/chatbot");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Login failed";
       setError(message);
