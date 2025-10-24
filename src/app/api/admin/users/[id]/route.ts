@@ -80,15 +80,17 @@ export async function PUT(
 
     const db = await connectDB();
     
-    // Check if trying to modify admin user (ID 1)
+    // Check if trying to modify an admin user
     const targetUser = await db.collection('users').findOne({ _id: new ObjectId(id) });
     if (!targetUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (targetUser.userId === 1) {
+    // Check if target user is an admin by looking up their role
+    const targetRole = await db.collection('roles').findOne({ _id: targetUser.roleId });
+    if (targetRole?.name === 'admin') {
       return NextResponse.json({ 
-        error: 'Cannot modify the primary admin user' 
+        error: 'Cannot modify admin users' 
       }, { status: 403 });
     }
 
@@ -152,15 +154,17 @@ export async function DELETE(
     const { id } = await params;
     const db = await connectDB();
     
-    // Check if trying to delete admin user (ID 1)
+    // Check if trying to delete an admin user
     const targetUser = await db.collection('users').findOne({ _id: new ObjectId(id) });
     if (!targetUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (targetUser.userId === 1) {
+    // Check if target user is an admin by looking up their role
+    const targetRole = await db.collection('roles').findOne({ _id: targetUser.roleId });
+    if (targetRole?.name === 'admin') {
       return NextResponse.json({ 
-        error: 'Cannot delete the primary admin user' 
+        error: 'Cannot delete admin users' 
       }, { status: 403 });
     }
 

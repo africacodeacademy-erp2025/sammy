@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '../../../../../../lib/mongo';
 import { verifyJwt, hashPassword } from '../../../../../../lib/auth';
-import { isAdmin, getNextUserId } from '../../../../../../lib/userHelpers';
+import { isAdmin, getRoleByName } from '../../../../../../lib/userHelpers';
+import { ObjectId } from 'mongodb';
 
 // POST - Create new user (admin only)
 export async function POST(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password, name, role, permissions } = body;
+    const { email, password, name, role } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -50,18 +51,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get next user ID
-    const newUserId = await getNextUserId();
+    // Get the role based on the provided role name
+    const targetRole = await getRoleByName(role || 'user');
+    if (!targetRole) {
+      return NextResponse.json(
+        { error: `Role '${role || 'user'}' not found` },
+        { status: 500 }
+      );
+    }
+
     const passwordHash = await hashPassword(password);
 
     const newUser = {
-      userId: newUserId,
       email: email.toLowerCase(),
       passwordHash,
       password: passwordHash,
       name: name || null,
-      role: role || 'user',
-      permissions: permissions || [],
+      roleId: new ObjectId(targetRole._id),
       createdAt: new Date(),
       updatedAt: new Date(),
       isActive: true,
@@ -74,11 +80,9 @@ export async function POST(request: NextRequest) {
       success: true,
       user: {
         _id: result.insertedId,
-        userId: newUser.userId,
         email: newUser.email,
         name: newUser.name,
-        role: newUser.role,
-        permissions: newUser.permissions,
+        roleId: newUser.roleId,
         isActive: newUser.isActive,
         createdAt: newUser.createdAt,
       },

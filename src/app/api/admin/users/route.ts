@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const users = await db.collection('users')
       .find({})
       .project({ passwordHash: 0, password: 0 }) // Don't send passwords
-      .sort({ userId: 1 })
+      .sort({ createdAt: -1 })
       .toArray() as UserDoc[];
 
     // Calculate statistics
