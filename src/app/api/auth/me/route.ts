@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "../../../../..//lib/auth";
+import { connectDB } from "../../../../../lib/mongo";
+import { ObjectId } from "mongodb";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,16 +16,22 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Get user's role information
+    const db = await connectDB();
+    const role = user.roleId ? await db.collection("roles").findOne({
+      _id: new ObjectId(user.roleId)
+    }) : null;
+
     // Return user with all necessary fields for dashboard selection
     return NextResponse.json({ 
       success: true, 
       user: {
         _id: user._id,
-        userId: user.userId || 0,
         email: user.email,
         name: user.name,
-        role: user.role || 'user',
-        permissions: user.permissions || [],
+        roleId: user.roleId,
+        role: role?.name || 'user',
+        permissions: role?.permissions || [],
         isActive: user.isActive !== false,
         createdAt: user.createdAt,
         lastLogin: user.lastLogin

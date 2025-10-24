@@ -39,16 +39,28 @@ export async function POST(req: NextRequest) {
       { $set: { lastLogin: new Date() } }
     );
 
+    // Get user's role
+    // user.roleId is already an ObjectId from MongoDB
+    const role = await db.collection("roles").findOne({
+      _id: user.roleId
+    });
+
+    console.log('User roleId:', user.roleId);
+    console.log('Found role:', role);
+    console.log('Role name:', role?.name);
+
     const token = signJwt(user._id.toString());
 
     const userForClient = {
       _id: user._id,
       email: user.email,
       name: user.name,
-      role: user.role || 'user',
-      userId: user.userId || 0,
+      roleId: user.roleId,
+      role: role?.name || 'user',
       createdAt: user.createdAt,
     };
+
+    console.log('Sending userForClient:', userForClient);
 
     return NextResponse.json({ success: true, token, user: userForClient });
   } catch (err: unknown) {

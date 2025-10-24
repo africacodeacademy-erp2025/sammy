@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../../lib/mongo";
 import { hashPassword, signJwt } from "../../../../..//lib/auth";
-import { getNextUserId } from "../../../../../lib/userHelpers";
+import { getRoleByName } from "../../../../../lib/userHelpers";
+import { ObjectId } from "mongodb";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,18 +34,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Get the 'user' role
+    const userRole = await getRoleByName('user');
+    if (!userRole) {
+      return NextResponse.json(
+        { success: false, error: "User role not found. Please run role initialization." },
+        { status: 500 }
+      );
+    }
+
     const passwordHash = await hashPassword(password);
-    
-    // Get next user ID (starts from 2, since 1 is admin)
-    const userId = await getNextUserId();
 
     const newUser = {
-      userId, // Sequential user ID
       email: email.toLowerCase(),
       passwordHash,
       password: passwordHash, // For compatibility
-      role: 'user' as const, // Default role is 'user'
-      permissions: [] as string[], // No special permissions by default
+      roleId: new ObjectId(userRole._id),
       name: name ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -56,10 +61,9 @@ export async function POST(req: NextRequest) {
 
     const userForClient = {
       _id: result.insertedId,
-      userId: newUser.userId,
       email: newUser.email,
       name: newUser.name,
-      role: newUser.role,
+      roleId: newUser.roleId,
       createdAt: newUser.createdAt,
     };
 
