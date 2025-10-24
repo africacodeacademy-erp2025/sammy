@@ -33,20 +33,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Update last login timestamp
+    await users.updateOne(
+      { _id: user._id },
+      { $set: { lastLogin: new Date() } }
+    );
+
+    // Get user's role
+    // user.roleId is already an ObjectId from MongoDB
+    const role = await db.collection("roles").findOne({
+      _id: user.roleId
+    });
+
+    console.log('User roleId:', user.roleId);
+    console.log('Found role:', role);
+    console.log('Role name:', role?.name);
+
     const token = signJwt(user._id.toString());
 
     const userForClient = {
       _id: user._id,
       email: user.email,
       name: user.name,
+      roleId: user.roleId,
+      role: role?.name || 'user',
       createdAt: user.createdAt,
     };
 
+    console.log('Sending userForClient:', userForClient);
+
     return NextResponse.json({ success: true, token, user: userForClient });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Login error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json(
-      { success: false, error: err?.message ?? "Internal Server Error" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

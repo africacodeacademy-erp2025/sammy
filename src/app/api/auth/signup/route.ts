@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../../lib/mongo";
 import { hashPassword, signJwt } from "../../../../..//lib/auth";
+import { getRoleByName } from "../../../../../lib/userHelpers";
+import { ObjectId } from "mongodb";
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,13 +34,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Get the 'user' role
+    const userRole = await getRoleByName('user');
+    if (!userRole) {
+      return NextResponse.json(
+        { success: false, error: "User role not found. Please run role initialization." },
+        { status: 500 }
+      );
+    }
+
     const passwordHash = await hashPassword(password);
 
     const newUser = {
       email: email.toLowerCase(),
       passwordHash,
+      password: passwordHash, // For compatibility
+      roleId: new ObjectId(userRole._id),
       name: name ?? null,
       createdAt: new Date(),
+      updatedAt: new Date(),
+      isActive: true,
+      lastLogin: null,
     };
 
     const result = await users.insertOne(newUser);
@@ -47,6 +63,7 @@ export async function POST(req: NextRequest) {
       _id: result.insertedId,
       email: newUser.email,
       name: newUser.name,
+      roleId: newUser.roleId,
       createdAt: newUser.createdAt,
     };
 
@@ -56,10 +73,11 @@ export async function POST(req: NextRequest) {
       { success: true, token, user: userForClient },
       { status: 201 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Signup error:", err);
+    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json(
-      { success: false, error: err?.message ?? "Internal Server Error" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

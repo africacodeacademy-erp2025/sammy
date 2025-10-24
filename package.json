@@ -9,6 +9,8 @@
     "start": "next start",
     "worker": "tsx workers/schedulePostWorker.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run worker\"",
+    "init:roles": "tsx scripts/initializeRoles.ts",
+    "init:admin": "tsx scripts/initializeAdmin.ts",
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch"
