@@ -34,13 +34,18 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
       
       // Check if user is admin to determine redirect
       const user = data.user;
-      const isAdmin = user?.role === 'admin' || user?.userId === 1;
+      console.log('Login response user:', user);
+      console.log('User role:', user?.role);
+      const isAdmin = user?.role === 'admin';
+      console.log('Is admin?', isAdmin);
       
       if (isAdmin) {
         // Admin users see dashboard selection page
+        console.log('Redirecting to dashboard-select');
         router.push("/dashboard-select");
       } else {
         // Regular users go directly to chatbot
+        console.log('Redirecting to chatbot');
         router.push("/chatbot");
       }
     } catch (err: unknown) {

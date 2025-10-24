@@ -9,7 +9,6 @@ import {
   Search,
   LogOut,
   UserCog,
-  Crown,
   X,
   Eye,
   EyeOff,
@@ -19,11 +18,9 @@ import {
 
 interface User {
   _id: string;
-  userId: number;
   email: string;
   name?: string;
   role: 'admin' | 'user';
-  permissions: string[];
   isActive: boolean;
   createdAt: string;
   lastLogin?: string;
@@ -95,8 +92,7 @@ export default function AdminDashboard() {
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.userId?.toString().includes(searchTerm);
+      user.name?.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesRole = filterRole === 'all' || user.role === filterRole;
 
@@ -127,15 +123,12 @@ export default function AdminDashboard() {
               {currentUser && (
                 <div className="text-right">
                   <div className="flex items-center gap-2">
-                    {currentUser.userId === 1 && (
-                      <Crown className="text-yellow-500" size={16} />
-                    )}
                     <p className="text-sm font-medium text-white">
                       {currentUser.email}
                     </p>
                   </div>
                   <p className="text-xs text-gray-400">
-                    ID: {currentUser.userId} | Role: {currentUser.role}
+                    Role: {currentUser.role}
                   </p>
                 </div>
               )}
@@ -228,10 +221,10 @@ export default function AdminDashboard() {
               <thead className="bg-gray-800">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    ID
+                    Email
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    User
+                    Name
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Role
@@ -272,8 +265,8 @@ export default function AdminDashboard() {
                         setShowEditModal(true);
                       }}
                       onDelete={async (user) => {
-                        if (user.userId === 1) {
-                          alert('Cannot delete the primary admin user');
+                        if (user.role === 'admin') {
+                          alert('Cannot delete admin users');
                           return;
                         }
                         if (confirm(`Are you sure you want to delete ${user.email}?`)) {
@@ -363,14 +356,10 @@ function UserRow({ user, onEdit, onDelete }: {
   return (
     <tr className="hover:bg-gray-800/50 transition-colors">
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center gap-2">
-          {user.userId === 1 && <Crown className="text-yellow-500" size={16} />}
-          <span className="text-white font-medium">#{user.userId || 'N/A'}</span>
-        </div>
+        <span className="text-white font-medium">{user.email}</span>
       </td>
       <td className="px-6 py-4">
         <div>
-          <p className="text-white font-medium">{user.email}</p>
           {user.name && <p className="text-gray-400 text-sm">{user.name}</p>}
         </div>
       </td>
@@ -410,13 +399,13 @@ function UserRow({ user, onEdit, onDelete }: {
           </button>
           <button
             onClick={() => onDelete(user)}
-            disabled={user.userId === 1}
+            disabled={user.role === 'admin'}
             className={`p-2 rounded-lg transition-colors ${
-              user.userId === 1
+              user.role === 'admin'
                 ? 'text-gray-600 cursor-not-allowed'
                 : 'text-red-400 hover:bg-red-500/20'
             }`}
-            title={user.userId === 1 ? 'Cannot delete admin' : 'Delete user'}
+            title={user.role === 'admin' ? 'Cannot delete admin' : 'Delete user'}
           >
             <Trash2 size={16} />
           </button>
@@ -643,7 +632,7 @@ function EditUserModal({ user, onClose, onSuccess }: {
       <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md border border-gray-700">
         <div className="p-6 border-b border-gray-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">Edit User #{user.userId || 'N/A'}</h2>
+            <h2 className="text-xl font-bold text-white">Edit User</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white"
@@ -657,15 +646,6 @@ function EditUserModal({ user, onClose, onSuccess }: {
           {error && (
             <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm">
               {error}
-            </div>
-          )}
-
-          {user.userId === 1 && (
-            <div className="p-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg text-yellow-400 text-sm">
-              <div className="flex items-center gap-2">
-                <Crown size={16} />
-                <span>This is the primary admin user. Some fields are protected.</span>
-              </div>
             </div>
           )}
 
@@ -723,7 +703,7 @@ function EditUserModal({ user, onClose, onSuccess }: {
             <select
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'user' })}
-              disabled={user.userId === 1}
+              disabled={user.role === 'admin'}
               className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:outline-none focus:border-purple-500 disabled:opacity-50"
             >
               <option value="user">User</option>
@@ -737,7 +717,7 @@ function EditUserModal({ user, onClose, onSuccess }: {
               id="isActive"
               checked={formData.isActive}
               onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              disabled={user.userId === 1}
+              disabled={user.role === 'admin'}
               className="w-5 h-5 rounded border-gray-700 text-purple-500 focus:ring-purple-500 disabled:opacity-50"
             />
             <label htmlFor="isActive" className="text-sm font-medium text-gray-400">

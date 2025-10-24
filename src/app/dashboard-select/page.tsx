@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, Shield, Crown, ArrowRight, LogOut } from 'lucide-react';
+import { MessageSquare, Shield, ArrowRight, LogOut } from 'lucide-react';
 
 export default function DashboardSelect() {
   const router = useRouter();
-  const [user, setUser] = useState<{ email: string; role: string; userId: number } | null>(null);
+  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const checkAuth = async () => {
@@ -32,7 +32,7 @@ export default function DashboardSelect() {
       const userData = data.user;
       
       // Check if user is admin
-      const isAdmin = userData?.role === 'admin' || userData?.userId === 1;
+      const isAdmin = userData?.role === 'admin';
       
       // If not admin, redirect to chatbot
       if (!isAdmin) {
@@ -75,7 +75,7 @@ export default function DashboardSelect() {
     );
   }
 
-  const isAdmin = user?.role === 'admin' || user?.userId === 1;
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-purple-950 text-white flex items-center justify-center p-4 relative overflow-hidden">
@@ -89,7 +89,6 @@ export default function DashboardSelect() {
         {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
-            {user?.userId === 1 && <Crown className="w-10 h-10 text-yellow-400 animate-pulse" />}
             <h1 className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
               Welcome Back!
             </h1>
@@ -101,7 +100,7 @@ export default function DashboardSelect() {
             <div className="mt-3 inline-flex items-center px-4 py-2 rounded-full bg-purple-500/20 border border-purple-500/50">
               <Shield className="w-4 h-4 mr-2 text-purple-400" />
               <span className="text-purple-300 font-semibold">
-                {user?.userId === 1 ? 'Super Admin' : 'Admin'}
+                Administrator
               </span>
             </div>
           )}
@@ -162,7 +161,6 @@ export default function DashboardSelect() {
                   <h2 className="text-3xl font-bold text-white">
                     Admin Dashboard
                   </h2>
-                  {user?.userId === 1 && <Crown className="w-7 h-7 text-yellow-300 animate-pulse" />}
                 </div>
                 <p className="text-purple-100 mb-6 leading-relaxed">
                   Manage users, view analytics, configure system settings, and oversee all platform operations with full control.
