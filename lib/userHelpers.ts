@@ -1,25 +1,22 @@
 import { connectDB } from './mongo';
 import { ObjectId } from 'mongodb';
 
-interface CounterDoc {
-  _id: string;
-  sequence: number;
+/**
+ * Get role by roleId
+ */
+export async function getRole(roleId: ObjectId) {
+  const db = await connectDB();
+  const role = await db.collection('roles').findOne({ _id: roleId });
+  return role;
 }
 
 /**
- * Get the next available user ID
- * Admin has ID 1, regular users start from ID 2
+ * Get role by name
  */
-export async function getNextUserId(): Promise<number> {
+export async function getRoleByName(roleName: 'admin' | 'user') {
   const db = await connectDB();
-  
-  const counter = await db.collection<CounterDoc>('counters').findOneAndUpdate(
-    { _id: 'userId' },
-    { $inc: { sequence: 1 } },
-    { upsert: true, returnDocument: 'after' }
-  );
-
-  return counter?.sequence || 2; // Start from 2 if counter doesn't exist
+  const role = await db.collection('roles').findOne({ name: roleName });
+  return role;
 }
 
 /**
@@ -31,7 +28,13 @@ export async function isAdmin(userId: string): Promise<boolean> {
     _id: new ObjectId(userId)
   });
   
-  return user?.role === 'admin' || user?.userId === 1;
+  if (!user || !user.roleId) return false;
+  
+  const role = await db.collection('roles').findOne({
+    _id: new ObjectId(user.roleId)
+  });
+  
+  return role?.name === 'admin';
 }
 
 /**
@@ -43,11 +46,14 @@ export async function hasPermission(userId: string, permission: string): Promise
     _id: new ObjectId(userId)
   });
   
-  if (!user) return false;
+  if (!user || !user.roleId) return false;
   
-  // Admin has all permissions
-  if (user.role === 'admin' || user.userId === 1) return true;
+  const role = await db.collection('roles').findOne({
+    _id: new ObjectId(user.roleId)
+  });
   
-  // Check if user has the specific permission
-  return user.permissions?.includes(permission) || user.permissions?.includes('all') || false;
+  if (!role) return false;
+  
+  // Check if role has 'all' permissions or the specific permission
+  return role.permissions?.includes('all') || role.permissions?.includes(permission) || false;
 }
