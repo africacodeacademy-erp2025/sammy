@@ -60,6 +60,10 @@ export default function RecurrenceModal({
   detectedDays,
 }: RecurrenceModalProps) {
   const [selectedTime, setSelectedTime] = useState(time);
+  // compute browser timezone offset for display (minutes)
+  const browserOffsetMinutes =
+    typeof window !== "undefined" ? new Date().getTimezoneOffset() : 0;
+  const browserOffsetHours = -browserOffsetMinutes / 60; // e.g. -120 -> +2
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
   const [selectedFrequency, setSelectedFrequency] = useState<
@@ -162,7 +166,7 @@ export default function RecurrenceModal({
           {/* Time Input */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Time (24-hour format, UTC)
+              Time (24-hour format, local)
             </label>
             <input
               type="time"
@@ -173,7 +177,11 @@ export default function RecurrenceModal({
                        transition duration-300"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Current: {selectedTime} UTC
+              Current: {selectedTime} (local time, UTC
+              {browserOffsetHours >= 0
+                ? `+${browserOffsetHours}`
+                : browserOffsetHours}
+              )
             </p>
           </div>
 
@@ -243,7 +251,8 @@ export default function RecurrenceModal({
           {selectedFrequency === "weekly" && (
             <div className="px-4 py-3 bg-blue-900/20 rounded-lg border border-blue-700/50">
               <p className="text-sm text-blue-300">
-                📅 This post will be published weekly at {selectedTime} UTC
+                📅 This post will be published weekly at {selectedTime} (local
+                time)
               </p>
             </div>
           )}

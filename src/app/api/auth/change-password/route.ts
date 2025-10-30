@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../../lib/mongo";
-import { hashPassword, getUserFromRequest, verifyPassword } from "../../../../../lib/auth";
+import {
+  hashPassword,
+  getUserFromRequest,
+  verifyPassword,
+  validatePassword,
+} from "../../../../../lib/auth";
 
 export async function PUT(req: NextRequest) {
   try {
@@ -19,14 +24,22 @@ export async function PUT(req: NextRequest) {
 
     if (!currentPassword || !newPassword) {
       return NextResponse.json(
-        { success: false, error: "Current password and new password are required" },
+        {
+          success: false,
+          error: "Current password and new password are required",
+        },
         { status: 400 }
       );
     }
 
-    if (newPassword.length < 6) {
+    // validate new password against centralized policy
+    const pwCheck = validatePassword(newPassword);
+    if (!pwCheck.valid) {
       return NextResponse.json(
-        { success: false, error: "New password must be at least 6 characters" },
+        {
+          success: false,
+          error: pwCheck.message || "New password does not meet policy",
+        },
         { status: 400 }
       );
     }
@@ -44,7 +57,10 @@ export async function PUT(req: NextRequest) {
     }
 
     // Verify current password
-    const isValidPassword = await verifyPassword(currentPassword, userWithPassword.passwordHash);
+    const isValidPassword = await verifyPassword(
+      currentPassword,
+      userWithPassword.passwordHash
+    );
     if (!isValidPassword) {
       return NextResponse.json(
         { success: false, error: "Current password is incorrect" },
@@ -56,10 +72,7 @@ export async function PUT(req: NextRequest) {
     const passwordHash = await hashPassword(newPassword);
 
     // Update user password
-    await users.updateOne(
-      { _id: user._id },
-      { $set: { passwordHash } }
-    );
+    await users.updateOne({ _id: user._id }, { $set: { passwordHash } });
 
     return NextResponse.json({
       success: true,
@@ -67,7 +80,8 @@ export async function PUT(req: NextRequest) {
     });
   } catch (err: unknown) {
     console.error("Change password error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
+    const errorMessage =
+      err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

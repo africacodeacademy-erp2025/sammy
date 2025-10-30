@@ -21,6 +21,32 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
       setError("Passwords do not match");
       return;
     }
+    // basic email format validation
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    // client-side password policy validation (mirror server)
+    const pwMinLength = 8;
+    const countMatches = (re: RegExp, s: string) => (s.match(re) || []).length;
+    const pwUpper = countMatches(/[A-Z]/g, password);
+    const pwLower = countMatches(/[a-z]/g, password);
+    const pwDigits = countMatches(/[0-9]/g, password);
+    const pwSpecial = countMatches(/[^A-Za-z0-9]/g, password);
+
+    if (
+      password.length < pwMinLength ||
+      pwUpper < 2 ||
+      pwLower < 2 ||
+      pwDigits < 2 ||
+      pwSpecial < 1
+    ) {
+      setError(
+        `Password must be at least ${pwMinLength} characters, contain at least 2 uppercase, 2 lowercase, 2 numbers and 1 special character.`
+      );
+      return;
+    }
     setError("");
     setLoading(true);
     try {
@@ -56,6 +82,18 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
+
+      {/* Password guide */}
+      <div className="text-sm text-gray-300 mb-2">
+        <p className="font-semibold">Password requirements:</p>
+        <ul className="list-disc list-inside text-xs mt-1 text-gray-400">
+          <li>At least 8 characters</li>
+          <li>At least 2 uppercase letters</li>
+          <li>At least 2 lowercase letters</li>
+          <li>At least 2 numbers</li>
+          <li>At least 1 special character (e.g. !@#$%)</li>
+        </ul>
+      </div>
 
       <div className="relative mb-4">
         <input

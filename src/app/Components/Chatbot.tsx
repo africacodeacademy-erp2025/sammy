@@ -43,6 +43,12 @@ export default function ChatBot() {
     detectedDays?: number[];
   } | null>(null);
 
+  // Follow-up confirmation UI state (for 'continue' / 'change' when thread exists)
+  const [followupInfo, setFollowupInfo] = useState<{
+    type: "continue" | "change";
+    changeInstr?: string;
+  } | null>(null);
+  const [followupConfirmVisible, setFollowupConfirmVisible] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -151,8 +157,26 @@ export default function ChatBot() {
         const token = localStorage.getItem("token");
         if (!token) return;
 
-        // Extract platform from messages (if any)
-        const platformMessage = messageList.find((m) => m.platform);
+        // Filter out transient UI messages (hints, warnings, errors) from saved history.
+        // These should still appear in the UI and be included when posting, but not persisted
+        // as part of the user's conversation history.
+        const isTransient = (m: Message) => {
+          if (!m) return false;
+          // Explicit statuses (use any to avoid strict status typing issues)
+          const status = (m as any).status as string | undefined;
+          if (status === "warning" || status === "error") return true;
+          // Content patterns that look like UI hints
+          if (typeof m.content === "string") {
+            const hintRe = /(🔗|to publish this|please connect your|please connect|connect your)/i;
+            if (hintRe.test(m.content)) return true;
+          }
+          return false;
+        };
+
+        const messagesToSave = messageList.filter((m) => !isTransient(m));
+
+        // Extract platform from messagesToSave (if any)
+        const platformMessage = messagesToSave.find((m) => m.platform);
         const platform = platformMessage?.platform;
 
         await fetch("/api/chat-history", {
@@ -163,7 +187,7 @@ export default function ChatBot() {
           },
           body: JSON.stringify({
             threadId,
-            messages: messageList,
+            messages: messagesToSave,
             platform,
           }),
         });
@@ -260,9 +284,34 @@ export default function ChatBot() {
     }
   }, []);
 
-  const sendMessage = async () => {
+  const sendMessage = async (skipConfirm = false) => {
     if (!input.trim() || loading) return;
     const userInput = input.trim();
+
+    const parseFollowup = (text: string) => {
+      const t = text.trim();
+      if (/^continue$/i.test(t)) return { type: "continue" as const };
+      const m = t.match(/^change\b(.*)/i);
+      if (m) return { type: "change" as const, changeInstr: m[1].trim() };
+      return null;
+    };
+
+    const parsedFollowup = parseFollowup(userInput);
+    // If this looks like a follow-up and we have an active thread, require confirmation first
+    if (parsedFollowup && currentThreadId && !skipConfirm) {
+      // If it's a 'change' with no instruction, prompt user to add more detail instead of confirming
+      if (parsedFollowup.type === "change" && !parsedFollowup.changeInstr) {
+        setFollowupInfo(parsedFollowup);
+        setFollowupConfirmVisible(false);
+        // Focus textarea for user to add the change instruction
+        setTimeout(() => textareaRef.current?.focus(), 50);
+        return;
+      }
+      setFollowupInfo(parsedFollowup);
+      setFollowupConfirmVisible(true);
+      return;
+    }
+
     addMessage({ sender: "user", content: userInput });
     setInput("");
     setLoading(true);
@@ -329,6 +378,7 @@ export default function ChatBot() {
         const aiMessage = {
           sender: "ai" as const,
           content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
+          platform: data.recurrenceData?.platform,
         };
         addMessage(aiMessage);
 
@@ -346,6 +396,7 @@ export default function ChatBot() {
           sender: "ai" as const,
           content: data.message,
           status: "scheduled" as const,
+          platform: data.platform,
         };
         addMessage(aiMessage);
 
@@ -368,12 +419,26 @@ export default function ChatBot() {
               : data.review?.platform === "facebook"
               ? "Facebook"
               : data.review?.platform;
-          const aiMessage = {
+
+          // Add the draft content as a normal AI message (so it becomes part of the conversation)
+          const draftMessage = {
             sender: "ai" as const,
-            content: `${data.review?.post}\n\n🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
-            // No status - no action buttons since they can't post
+            content: data.review?.post || data.message,
+            platform: data.review?.platform,
+            // No status so there are no post action buttons (user cannot post without credentials)
           };
-          addMessage(aiMessage);
+          addMessage(draftMessage);
+
+          // Add a separate transient warning/hint message that should NOT be saved to chatHistory
+          const hintMessage = {
+            sender: "ai" as const,
+            content: `🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
+            platform: data.review?.platform,
+            // Mark as warning so it will be filtered from saved history
+            status: "warning" as const,
+          };
+          // cast to any to avoid strict status typing in Message type
+          addMessage(hintMessage as any);
 
           // Auto-save conversation
           if (threadId) {
@@ -526,6 +591,24 @@ export default function ChatBot() {
     updateMessageStatus(id, "rejected");
   };
 
+  const formatNextOccurrence = (timestamp: string) => {
+    const date = new Date(timestamp);
+
+    // Manual formatting to guarantee AM/PM suffix and consistent output
+    const weekday = date.toLocaleString("en-US", { weekday: "short" });
+    const month = date.toLocaleString("en-US", { month: "short" });
+    const day = date.getDate();
+    const year = date.getFullYear();
+    let hour = date.getHours();
+    const minute = date.getMinutes();
+    const ampm = hour >= 12 ? "PM" : "AM";
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    const minuteStr = minute.toString().padStart(2, "0");
+
+    return `${weekday}, ${month} ${day}, ${year}, ${hour}:${minuteStr} ${ampm}`;
+  };
+
   const handleRecurrenceConfirm = async (settings: RecurrenceSettings) => {
     setRecurrenceModalOpen(false);
     setLoading(true);
@@ -556,12 +639,20 @@ export default function ChatBot() {
         return;
       }
 
-      // Use the formatted message from the backend
-      addMessage({
-        sender: "ai",
-        content: data.message,
-        status: "scheduled",
-      });
+      // Use backend message but remove any existing 'Next post' line and replace
+      // it with a localized version built on the client.
+      const raw = data.message || "Recurring schedule created.";
+      // Remove any line that contains 'Next post' (Emoji or plain)
+      const lines = raw
+        .split(/\r?\n/)
+        .filter((l: string) => !/next post/i.test(l));
+      let message = lines.join("\n").trim();
+      if (data.nextOccurrence) {
+        const localNext = formatNextOccurrence(data.nextOccurrence);
+        message = `${message}\n\n🔜 Next post (local): ${localNext}`;
+      }
+
+      addMessage({ sender: "ai", content: message, status: "scheduled" });
     } catch (err: unknown) {
       const message =
         err instanceof Error
@@ -837,6 +928,58 @@ export default function ChatBot() {
         {/* Input Area - Full Width Background */}
         <div className="fixed bottom-0 left-0 w-full z-20 bg-gray-950">
           <div className="max-w-[1200px] mx-auto px-2 sm:px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
+            {/* Follow-up confirmation banner (continue / change) */}
+            {followupConfirmVisible && followupInfo && (
+              <div className="mb-2 max-w-[1200px] mx-auto px-2 sm:px-4">
+                <div className="rounded-lg p-2 bg-gray-850 border border-gray-700 text-white flex items-center justify-between">
+                  <div className="text-sm">
+                    {followupInfo.type === "continue" ? (
+                      <>
+                        You're about to continue the last draft in this
+                        conversation. This will generate a new version based on
+                        the previous AI draft.
+                      </>
+                    ) : (
+                      <>
+                        You're about to modify the last draft
+                        {followupInfo.changeInstr
+                          ? `: "${followupInfo.changeInstr}"`
+                          : "."}
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        // Hide banner and proceed with sending (skip confirm)
+                        setFollowupConfirmVisible(false);
+                        setTimeout(() => sendMessage(true), 50);
+                      }}
+                      className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Continue
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFollowupConfirmVisible(false);
+                        setFollowupInfo(null);
+                      }}
+                      className="px-3 py-1 rounded bg-gray-800 text-white text-sm border border-gray-700"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* If user typed 'change' but provided no instruction, prompt to add details */}
+            {followupInfo?.type === "change" && !followupInfo.changeInstr && (
+              <div className="mb-2 max-w-[1200px] mx-auto px-2 sm:px-4 text-sm text-gray-400">
+                Please specify how you'd like the post changed after "change".
+              </div>
+            )}
+
             <div className="flex flex-row items-end gap-2 w-full">
               <textarea
                 ref={textareaRef}
@@ -862,7 +1005,7 @@ export default function ChatBot() {
               <button
                 className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 sm:px-4 py-3 min-h-[48px] rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all disabled:opacity-50 flex items-center justify-center shadow-md min-w-[70px] sm:min-w-[90px]"
                 disabled={loading || !input.trim()}
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 style={{ touchAction: "manipulation" }}
               >
                 {loading ? (

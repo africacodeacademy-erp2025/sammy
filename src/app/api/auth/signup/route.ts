@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "../../../../../lib/mongo";
-import { hashPassword, signJwt } from "../../../../..//lib/auth";
+import {
+  hashPassword,
+  signJwt,
+  validatePassword,
+} from "../../../../..//lib/auth";
 import { getRoleByName } from "../../../../../lib/userHelpers";
 import { ObjectId } from "mongodb";
 
@@ -16,9 +20,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (typeof password !== "string" || password.length < 6) {
+    // validate types
+    if (typeof email !== "string" || typeof password !== "string") {
       return NextResponse.json(
-        { success: false, error: "Password must be at least 6 characters" },
+        { success: false, error: "Email and password must be strings" },
+        { status: 400 }
+      );
+    }
+
+    // basic email format check
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid email format" },
+        { status: 400 }
+      );
+    }
+
+    // validate password using centralized helper
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: pwCheck.message || "Password does not meet policy",
+        },
         { status: 400 }
       );
     }
@@ -35,10 +61,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Get the 'user' role
-    const userRole = await getRoleByName('user');
+    const userRole = await getRoleByName("user");
     if (!userRole) {
       return NextResponse.json(
-        { success: false, error: "User role not found. Please run role initialization." },
+        {
+          success: false,
+          error: "User role not found. Please run role initialization.",
+        },
         { status: 500 }
       );
     }
@@ -75,7 +104,8 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: unknown) {
     console.error("Signup error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
+    const errorMessage =
+      err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

@@ -85,6 +85,25 @@ function detectPlatform(
   };
 }
 
+/**
+ * Heuristic to determine if the prompt contains a topic beyond just mentioning the platform.
+ * Returns true if there appears to be a substantive topic in the prompt.
+ */
+function hasTopic(prompt: string, platform: string): boolean {
+  if (!prompt) return false;
+  const normalized = prompt.toLowerCase();
+  // Remove the platform token and common verbs/stopwords that indicate an instruction only
+  let cleaned = normalized.replace(new RegExp(`\\b${platform}\\b`, "gi"), "");
+  cleaned = cleaned.replace(
+    /\b(post|create|write|tweet|compose|publish|please|for|me|about|on|to|a|the|in)\b/gi,
+    ""
+  );
+  // Remove punctuation and extra whitespace
+  cleaned = cleaned.replace(/[^\w\s]/g, "").trim();
+  // Consider it a topic if we have more than a couple characters (word length > 2)
+  return cleaned.length > 2;
+}
+
 function isValidISODate(dateString: string): boolean {
   const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
   return isoRegex.test(dateString);
@@ -891,7 +910,10 @@ export async function POST(req: NextRequest) {
 
     // threadId: Optional - if provided, loads conversation history for context
     // conversationHistory: Not used directly here (context loaded from DB via threadId)
-    const { prompt, platform, threadId } = await req.json();
+    const body = await req.json();
+    let prompt = body.prompt;
+    let platform = body.platform;
+    const threadId = body.threadId;
 
     // Check for greetings first - no platform needed
     if (detectGreeting(prompt)) {
@@ -907,12 +929,83 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // If the user provided a short follow-up like "continue" or "change..." and
+    // a threadId is present, attempt to modify/continue the last AI draft from the conversation
+    // BEFORE platform detection so we can inherit the platform from the previous draft.
+    if (
+      (threadId && /^\s*(continue)\s*$/i.test(prompt.trim())) ||
+      (threadId && /^\s*(change)\b/i.test(prompt.trim()))
+    ) {
+      try {
+        const db = await connectDB();
+        const conv = await db.collection("chatHistory").findOne({
+          userId,
+          threadId,
+        });
+        if (conv && conv.messages && Array.isArray(conv.messages)) {
+          // Find the last AI message in the conversation
+          const msgs = conv.messages.slice().reverse();
+          const lastAi = msgs.find((m: any) => m.sender === "ai" && m.content);
+          if (lastAi && lastAi.content) {
+            const trimmed = prompt.trim();
+            if (/^\s*(continue)\s*$/i.test(trimmed)) {
+              // Clean last AI content to remove instructional UI lines (e.g., connect-account prompts)
+              const cleaned = lastAi.content
+                .replace(/🔗.*connect.*account.*$/i, "")
+                .replace(/🔜.*next post.*$/i, "")
+                .trim();
+              prompt = `Continue the following draft:\n\n${cleaned}`;
+            } else if (/^\s*(change)\b/i.test(trimmed)) {
+              const changeInstr = trimmed.replace(/^change\b/i, "").trim();
+              if (!changeInstr) {
+                return NextResponse.json(
+                  {
+                    success: false,
+                    error:
+                      "Please specify how you'd like the post changed (e.g., 'change to be more casual')",
+                  },
+                  { status: 400 }
+                );
+              }
+              const cleaned = lastAi.content
+                .replace(/🔗.*connect.*account.*$/i, "")
+                .replace(/🔜.*next post.*$/i, "")
+                .trim();
+              prompt = `Modify the following draft:\n\n${cleaned}\n\nChange: ${changeInstr}`;
+            }
+
+            // If platform wasn't provided, prefer the conversation-level platform
+            // (chatHistory stores `platform`) and fall back to the last AI message.
+            if (!platform) {
+              platform = conv.platform || lastAi.platform || undefined;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching conversation for continue/change:", err);
+      }
+    }
+
     const platformResult = detectPlatform(prompt, platform);
+    // If we inferred a platform from the conversation earlier, prefer it as the effective platform
+    const effectivePlatform = platform || platformResult.platform;
     if (!platformResult.platform || platformResult.error) {
       return NextResponse.json(
         {
           success: false,
           error: platformResult.error || "Could not detect platform",
+        },
+        { status: 400 }
+      );
+    }
+
+    // If user only mentioned the platform (e.g., "twitter" or "facebook") without a topic,
+    // ask them to provide the topic to post about.
+    if (!hasTopic(prompt, effectivePlatform || "")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Please provide the topic you want to post about",
         },
         { status: 400 }
       );
@@ -925,7 +1018,7 @@ export async function POST(req: NextRequest) {
     if (recurrenceResult.hasRecurrence && recurrenceResult.frequency) {
       const timeResult = await extractRecurrenceTime({
         prompt,
-        platform: platformResult.platform,
+        platform: effectivePlatform,
         userId,
       });
 
@@ -949,7 +1042,7 @@ export async function POST(req: NextRequest) {
     // Continue with existing one-time scheduling logic
     const result = await generateApp.invoke({
       prompt,
-      platform: platformResult.platform,
+      platform: effectivePlatform,
       userId,
       threadId: threadId || undefined, // Pass threadId for conversation context
     });
@@ -1023,16 +1116,14 @@ export async function POST(req: NextRequest) {
     // Check if user has credentials for the detected platform
     const userDoc = await db.collection("users").findOne({ _id: user._id });
     const hasCredentials =
-      platformResult.platform === "twitter"
-        ? userDoc?.twitter
-        : userDoc?.facebook;
+      effectivePlatform === "twitter" ? userDoc?.twitter : userDoc?.facebook;
 
     return NextResponse.json({
       success: true,
       review: {
         post: result.post,
         threadId: result.threadId,
-        platform: result.platform,
+        platform: effectivePlatform || result.platform,
         userId,
         hasCredentials: !!hasCredentials,
       },

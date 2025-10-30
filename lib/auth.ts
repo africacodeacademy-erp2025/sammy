@@ -79,3 +79,49 @@ export function handleExpiredToken(error: any, platform: string) {
   }
   return { expired: false, message: "" };
 }
+
+/**
+ * Validate password against policy:
+ * - minLength (default 8)
+ * - minUpper (default 2)
+ * - minLower (default 2)
+ * - minDigits (default 2)
+ * - minSpecial (default 1)
+ * Returns { valid: boolean, message?: string }
+ */
+export function validatePassword(password: string) {
+  const policy = {
+    minLength: 8,
+    minUpper: 2,
+    minLower: 2,
+    minDigits: 2,
+    minSpecial: 1,
+  };
+
+  const countMatches = (re: RegExp, s: string) => (s.match(re) || []).length;
+
+  if (typeof password !== "string") {
+    return { valid: false, message: "Password must be a string" };
+  }
+
+  const len = password.length;
+  const upper = countMatches(/[A-Z]/g, password);
+  const lower = countMatches(/[a-z]/g, password);
+  const digits = countMatches(/[0-9]/g, password);
+  const special = countMatches(/[^A-Za-z0-9]/g, password);
+
+  if (
+    len < policy.minLength ||
+    upper < policy.minUpper ||
+    lower < policy.minLower ||
+    digits < policy.minDigits ||
+    special < policy.minSpecial
+  ) {
+    return {
+      valid: false,
+      message: `Password must be at least ${policy.minLength} characters, contain at least ${policy.minUpper} uppercase letters, ${policy.minLower} lowercase letters, ${policy.minDigits} digits, and ${policy.minSpecial} special character(s).`,
+    };
+  }
+
+  return { valid: true };
+}
