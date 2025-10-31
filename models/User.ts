@@ -6,6 +6,7 @@ export type UserDoc = {
   passwordHash?: string; // Optional for backward compatibility
   password?: string; // For admin initialization
   roleId: ObjectId; // Reference to roles collection
+  planId: ObjectId; // Reference to plans collection
   name?: string;
   createdAt?: Date;
   updatedAt?: Date;

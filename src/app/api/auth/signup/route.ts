@@ -11,7 +11,16 @@ import { ObjectId } from "mongodb";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, name } = body ?? {};
+    const { email, password, name, planId } = body ?? {};
+
+    // Validate planId
+    const validPlanIds = [1, 2, 3];
+    if (!validPlanIds.includes(planId)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid plan selected" },
+        { status: 400 }
+      );
+    }
 
     if (!email || !password) {
       return NextResponse.json(
@@ -79,6 +88,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       password: passwordHash, // For compatibility
       roleId: new ObjectId(userRole._id),
+      planId: planId,
       name: name ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -93,6 +103,7 @@ export async function POST(req: NextRequest) {
       email: newUser.email,
       name: newUser.name,
       roleId: newUser.roleId,
+      planId: newUser.planId,
       createdAt: newUser.createdAt,
     };
 

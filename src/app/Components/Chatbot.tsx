@@ -1,5 +1,4 @@
 "use client";
-// Icons handled within ProfileMenu component
 import Image from "next/image";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { History, Trash2, Send, Menu } from "lucide-react";
@@ -23,6 +22,10 @@ export default function ChatBot() {
   const [profileSidebarOpen, setProfileSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<{
+    name: string;
+    features: string[];
+  } | null>(null);
   const [view, setView] = useState<"chat" | "schedule">("chat");
   const [hasRequiredCredentials, setHasRequiredCredentials] = useState(false);
 
@@ -96,9 +99,37 @@ export default function ChatBot() {
         }
 
         const user = await res.json();
-
-        // Set user email for profile dropdown
         setUserEmail(user.email);
+
+        // Extract planId (support string or {$oid: string})
+        const rawPlan = user.planId;
+        const planId =
+          typeof rawPlan === "string"
+            ? rawPlan
+            : rawPlan?.$oid || rawPlan?.toString?.() || "";
+
+        if (planId) {
+          // Fetch plan using GET (API route expects planId in path)
+          const planRes = await fetch(`/api/plans/${planId}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (planRes.ok) {
+            const planData = await planRes.json();
+            if (planData?.success && planData.plan) {
+              setUserPlan(planData.plan);
+            }
+          } else {
+            console.error("Failed to fetch plan:", await planRes.text());
+          }
+        } else {
+          console.warn(
+            "No planId available on user object, skipping plan fetch",
+            user
+          );
+        }
 
         if (user.slack && user.twitter && user.facebook) {
           setHasRequiredCredentials(true);
@@ -167,7 +198,8 @@ export default function ChatBot() {
           if (status === "warning" || status === "error") return true;
           // Content patterns that look like UI hints
           if (typeof m.content === "string") {
-            const hintRe = /(🔗|to publish this|please connect your|please connect|connect your)/i;
+            const hintRe =
+              /(🔗|to publish this|please connect your|please connect|connect your)/i;
             if (hintRe.test(m.content)) return true;
           }
           return false;
@@ -801,10 +833,18 @@ export default function ChatBot() {
                   style={{ objectFit: "cover" }}
                 />
               </div>
-              <div>
-                <h1 className="font-bold text-white text-sm sm:text-base">
-                  SaMMy
-                </h1>
+              <div className="flex flex-col">
+                <div className="flex flex-col gap-1">
+                  {userPlan ? (
+                    <div className="flex items-center">
+                      <span className="text-xs font-medium px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
+                        {userPlan.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400">Loading plan...</div>
+                  )}
+                </div>
               </div>
             </div>
 

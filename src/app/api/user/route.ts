@@ -11,8 +11,14 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({
-      id: user._id,
+      id: user._id?.toString?.() || null,
       email: user.email,
+      // Normalize planId to string when present so client can consume it reliably
+      planId: user.planId
+        ? user.planId.toString
+          ? user.planId.toString()
+          : String(user.planId)
+        : null,
       slack: user.slack ?? null,
       twitter: user.twitter ?? null,
       facebook: user.facebook ?? null,

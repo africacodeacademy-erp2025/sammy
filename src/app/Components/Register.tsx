@@ -5,9 +5,13 @@ import { Eye, EyeOff } from "lucide-react";
 type RegisterProps = {
   onSwitchToLogin: () => void;
   onRegisterSuccess?: () => void;
+  selectedPlanId?: number;
 };
 
-export default function Register({ onSwitchToLogin }: RegisterProps) {
+export default function Register({
+  onSwitchToLogin,
+  selectedPlanId,
+}: RegisterProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -53,7 +57,11 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          planId: selectedPlanId || 1, // Default to basic plan if none selected
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
@@ -70,9 +78,14 @@ export default function Register({ onSwitchToLogin }: RegisterProps) {
 
   return (
     <div className="bg-gray-800/50 p-8 rounded-2xl shadow-lg border border-gray-700/50 w-full max-w-md lg:w-[460px]">
-      <h2 className="text-2xl font-bold text-white mb-6 text-center">
+      <h2 className="text-2xl font-bold text-white mb-2 text-center">
         Create Account
       </h2>
+      <p className="text-center text-gray-400 mb-6">
+        {selectedPlanId === 1 && "Basic Plan"}
+        {selectedPlanId === 2 && "Pro Plan"}
+        {selectedPlanId === 3 && "Business Plan"}
+      </p>
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
       <input

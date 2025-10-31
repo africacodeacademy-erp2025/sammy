@@ -42,12 +42,12 @@ export async function POST(req: NextRequest) {
     // Get user's role
     // user.roleId is already an ObjectId from MongoDB
     const role = await db.collection("roles").findOne({
-      _id: user.roleId
+      _id: user.roleId,
     });
 
-    console.log('User roleId:', user.roleId);
-    console.log('Found role:', role);
-    console.log('Role name:', role?.name);
+    console.log("User roleId:", user.roleId);
+    console.log("Found role:", role);
+    console.log("Role name:", role?.name);
 
     const token = signJwt(user._id.toString());
 
@@ -56,16 +56,18 @@ export async function POST(req: NextRequest) {
       email: user.email,
       name: user.name,
       roleId: user.roleId,
-      role: role?.name || 'user',
+      role: role?.name || "user",
+      planId: user.planId || 1, // Default to basic plan if not set
       createdAt: user.createdAt,
     };
 
-    console.log('Sending userForClient:', userForClient);
+    console.log("Sending userForClient:", userForClient);
 
     return NextResponse.json({ success: true, token, user: userForClient });
   } catch (err: unknown) {
     console.error("Login error:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal Server Error";
+    const errorMessage =
+      err instanceof Error ? err.message : "Internal Server Error";
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

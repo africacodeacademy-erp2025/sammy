@@ -88,6 +88,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
     facebook: "",
     slack: "",
   });
+  const [isBusinessPlan, setIsBusinessPlan] = useState(false);
 
   // Check URL parameters for OAuth success/error messages
   useEffect(() => {
@@ -228,6 +229,34 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
             facebook: facebookConnected,
             slack: slackConnected,
           });
+
+          // Determine plan type: if user has planId, try to fetch plan details
+          const planId = user?.planId;
+          if (planId) {
+            try {
+              const planRes = await fetch(`/api/plans/${planId}`, {
+                headers: { authorization: `Bearer ${token}` },
+              });
+              if (planRes.ok) {
+                const planData = await planRes.json();
+                const plan = planData?.plan;
+                // Consider Business plan when planId numeric === 3 or name contains 'business'
+                const isBusiness =
+                  (plan &&
+                    typeof plan.planId === "number" &&
+                    plan.planId === 3) ||
+                  (plan &&
+                    typeof plan.name === "string" &&
+                    plan.name.toLowerCase().includes("business"));
+                setIsBusinessPlan(Boolean(isBusiness));
+              }
+            } catch (err) {
+              // ignore plan fetch errors — default to non-business
+              setIsBusinessPlan(false);
+            }
+          } else {
+            setIsBusinessPlan(false);
+          }
         }
       } catch (error) {
         console.error("Failed to check platform status:", error);
@@ -435,9 +464,13 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
 
           <OAuthCard platform="facebook" />
 
-          <Separator />
+          {isBusinessPlan && (
+            <>
+              <Separator />
 
-          <OAuthCard platform="slack" />
+              <OAuthCard platform="slack" />
+            </>
+          )}
         </div>
       </aside>
     </>

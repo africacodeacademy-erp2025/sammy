@@ -3,13 +3,37 @@ import React, { useState, useRef, useEffect } from "react";
 import Login from "./Login";
 import Register from "./Register";
 import { useRouter } from "next/navigation";
-import { metadata } from "../layout";
+import PricingCard from "./UI/PricingCard";
+import FeatureCard from "./UI/FeatureCard";
+import { Plan } from "../Types/Plan";
 
 export default function Home() {
   const [view, setView] = useState<"home" | "login" | "register">("home");
   const [hasToken, setHasToken] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
   const formRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Fetch plans from database
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await fetch("/api/plans");
+        const data = await response.json();
+        if (data.success && data.plans) {
+          setPlans(data.plans);
+        }
+      } catch (error) {
+        console.error("Error fetching plans:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlans();
+  }, []);
 
   // Check for JWT on mount and verify it's valid
   useEffect(() => {
@@ -20,7 +44,6 @@ export default function Home() {
         return;
       }
 
-      // Verify token is still valid by checking with the server
       try {
         const res = await fetch("/api/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
@@ -29,12 +52,10 @@ export default function Home() {
         if (res.ok) {
           setHasToken(true);
         } else {
-          // Token is invalid or expired, remove it
           localStorage.removeItem("token");
           setHasToken(false);
         }
       } catch (error) {
-        // Network error or server error, remove token to be safe
         localStorage.removeItem("token");
         setHasToken(false);
       }
@@ -54,7 +75,6 @@ export default function Home() {
   }, [view]);
 
   const handleContinue = () => {
-    // Navigate or perform an action with the token
     router.push("/chatbot");
   };
 
@@ -62,7 +82,6 @@ export default function Home() {
     <div className="w-full bg-gradient-to-br from-gray-950 via-gray-900 to-purple-950 text-white flex flex-col min-h-screen">
       {/* Hero Section */}
       <section className="relative min-h-[80vh] flex flex-col md:flex-row items-center justify-between px-6 md:px-20 py-20 gap-10 overflow-hidden">
-        {/* Decorative background shapes */}
         <div className="absolute inset-0 pointer-events-none z-0">
           <div className="absolute top-0 left-0 w-96 h-96 bg-purple-700/20 rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-0 right-0 w-80 h-80 bg-blue-600/20 rounded-full blur-2xl animate-pulse" />
@@ -87,20 +106,12 @@ export default function Home() {
             </p>
             <div className="flex gap-4 mt-6">
               {!hasToken ? (
-                <>
-                  <button
-                    onClick={() => setView("login")}
-                    className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
-                  >
-                    Login
-                  </button>
-                  <button
-                    onClick={() => setView("register")}
-                    className="px-6 py-2 rounded-3xl border-2 border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white transition-all font-bold text-base shadow-lg"
-                  >
-                    Register
-                  </button>
-                </>
+                <button
+                  onClick={() => setView("login")}
+                  className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
+                >
+                  Get Started
+                </button>
               ) : (
                 <button
                   className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-6 py-2 rounded-3xl hover:from-blue-600 hover:to-purple-600 transition-all font-bold text-base shadow-lg flex items-center justify-center min-w-[120px]"
@@ -138,6 +149,7 @@ export default function Home() {
             <Register
               onSwitchToLogin={() => setView("login")}
               onRegisterSuccess={() => setHasToken(true)}
+              selectedPlanId={selectedPlanId ?? undefined}
             />
           )}
         </div>
@@ -150,8 +162,12 @@ export default function Home() {
             Features
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            <div className="flex flex-col gap-6 items-center text-center bg-gray-800/50 rounded-2xl p-8 shadow-xl border border-gray-700/50 hover:scale-105 transition-transform">
-              <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 mb-4">
+            <FeatureCard
+              title="AI Content Generation"
+              description="Generate engaging posts, tweets, and threads using AI tailored for your audience. Save time and boost creativity."
+              gradientFrom="blue-500"
+              gradientTo="purple-500"
+              icon={
                 <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
                   <path
                     fill="white"
@@ -165,44 +181,97 @@ export default function Home() {
                     strokeWidth="2"
                   />
                 </svg>
-              </div>
-              <h3 className="font-bold text-2xl">AI Content Generation</h3>
-              <p className="text-gray-300 text-base leading-relaxed">
-                Generate engaging posts, tweets, and threads using AI tailored
-                for your audience. Save time and boost creativity.
-              </p>
-            </div>
-            <div className="flex flex-col gap-6 items-center text-center bg-gray-800/50 rounded-2xl p-8 shadow-xl border border-gray-700/50 hover:scale-105 transition-transform">
-              <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-4">
+              }
+            />
+
+            <FeatureCard
+              title="Schedule & Automate"
+              description="Plan your content ahead of time and post automatically across platforms. Never miss a moment."
+              gradientFrom="purple-500"
+              gradientTo="pink-500"
+              icon={
                 <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
                   <path
                     fill="white"
                     d="M17 2a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10zm-1 2H8v16h8V4zm-4 8v4m0-4h2m-2 0H9"
                   />
                 </svg>
-              </div>
-              <h3 className="font-bold text-2xl">Schedule & Automate</h3>
-              <p className="text-gray-300 text-base leading-relaxed">
-                Plan your content ahead of time and post automatically across
-                platforms. Never miss a moment.
-              </p>
-            </div>
-            <div className="flex flex-col gap-6 items-center text-center bg-gray-800/50 rounded-2xl p-8 shadow-xl border border-gray-700/50 hover:scale-105 transition-transform">
-              <div className="w-16 h-16 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-pink-500 mb-4">
+              }
+            />
+
+            <FeatureCard
+              title="Multi-Platform Integration"
+              description="Connect Slack, Twitter/X, and Facebook accounts. Let SaMMy manage everything with just a single prompt."
+              gradientFrom="blue-500"
+              gradientTo="pink-500"
+              icon={
                 <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
                   <path
                     fill="white"
                     d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 14.93V17a1 1 0 0 1-2 0v-2.07a8.001 8.001 0 0 1-6.93-6.93H7a1 1 0 0 1 0-2H4.07A8.001 8.001 0 0 1 12 4.07V7a1 1 0 0 1 2 0v2.93a8.001 8.001 0 0 1 6.93 6.93H17a1 1 0 0 1 0 2h2.93A8.001 8.001 0 0 1 13 16.93z"
                   />
                 </svg>
-              </div>
-              <h3 className="font-bold text-2xl">Multi-Platform Integration</h3>
-              <p className="text-gray-300 text-base leading-relaxed">
-                Connect Slack, Twitter/X, and Facebook accounts. Let SaMMy
-                manage everything with just a single prompt.
-              </p>
-            </div>
+              }
+            />
           </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-20 px-6 md:px-20 bg-gray-900">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-4xl font-extrabold mb-16 text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg">
+            Choose Your Plan
+          </h2>
+          {loading ? (
+            <div className="flex justify-center items-center h-[500px]">
+              <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {plans.map((plan) => (
+                <PricingCard
+                  key={plan.planId}
+                  type={plan.name.split(" ")[0].toUpperCase()}
+                  title={plan.name}
+                  price={`$${plan.price.toFixed(2)}`}
+                  description={plan.description}
+                  features={plan.features.map((feature) => ({ text: feature }))}
+                  buttonText={
+                    plan.planId === 2
+                      ? "Upgrade to Pro"
+                      : plan.planId === 3
+                      ? "Business Account"
+                      : "Get Started"
+                  }
+                  isPopular={plan.planId === 2}
+                  gradientFrom={plan.planId === 2 ? "purple-500" : "blue-500"}
+                  gradientTo={
+                    plan.planId === 2
+                      ? "pink-500"
+                      : plan.planId === 3
+                      ? "pink-500"
+                      : "purple-500"
+                  }
+                  planId={plan.planId}
+                  onSelectPlan={(id) => {
+                    setSelectedPlanId(id);
+                    if (view !== "register") {
+                      setView("register");
+                    }
+                    if (formRef.current) {
+                      const offset = 50;
+                      const top =
+                        formRef.current.getBoundingClientRect().top +
+                        window.scrollY -
+                        offset;
+                      window.scrollTo({ top, behavior: "smooth" });
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -220,22 +289,17 @@ export default function Home() {
           {!hasToken && (
             <div className="flex gap-6 mt-4">
               <button
-                onClick={() => setView("register")}
+                onClick={() => setView("login")}
                 className="px-6 py-2 rounded-3xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 transition-all text-white font-bold text-base shadow-lg"
               >
-                Register
-              </button>
-              <button
-                onClick={() => setView("login")}
-                className="px-6 py-2 rounded-3xl border-2 border-purple-500 text-purple-400 hover:bg-purple-500 hover:text-white transition-all font-bold text-base shadow-lg"
-              >
-                Login
+                Get Started
               </button>
             </div>
           )}
         </div>
       </section>
 
+      {/* Footer */}
       <footer className="p-8 text-center text-gray-400 border-t border-gray-700/50 bg-gray-950 mt-auto flex flex-col items-center gap-4">
         <div className="flex gap-6 justify-center mb-2">
           <a
