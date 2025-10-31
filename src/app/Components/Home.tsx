@@ -218,7 +218,7 @@ export default function Home() {
       </section>
 
       {/* Pricing Section */}
-      <section className="py-20 px-6 md:px-20 bg-gray-900">
+      <section id="plans" className="py-20 px-6 md:px-20 bg-gray-900">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl font-extrabold mb-16 text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-lg">
             Choose Your Plan
