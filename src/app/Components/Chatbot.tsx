@@ -11,6 +11,7 @@ import Sidebar from "./Sidebar";
 import ProfileMenu from "./UI/ProfileMenu";
 import RecurrenceModal, { RecurrenceSettings } from "./RecurrenceModal";
 import HistoryModal from "./HistoryModal";
+import UpgradeToProModal from "./UpgradeToProModal";
 
 export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -45,6 +46,7 @@ export default function ChatBot() {
     prompt: string;
     detectedDays?: number[];
   } | null>(null);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   // Follow-up confirmation UI state (for 'continue' / 'change' when thread exists)
   const [followupInfo, setFollowupInfo] = useState<{
@@ -404,24 +406,48 @@ export default function ChatBot() {
           }, 100);
         }
       } else if (data.recurrence) {
-        // Handle recurrence - show modal with converted time
-        setRecurrenceData(data.recurrenceData);
-        setRecurrenceModalOpen(true);
-        const aiMessage = {
-          sender: "ai" as const,
-          content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
-          platform: data.recurrenceData?.platform,
-        };
-        addMessage(aiMessage);
+        // Handle recurrence - restrict for Basic plan users
+        const currentPlanName = userPlan?.name?.toLowerCase() || "";
+        if (currentPlanName.includes("basic")) {
+          // Show upgrade modal instead of RecurrenceModal
+          setUpgradeModalOpen(true);
+          const aiMessage = {
+            sender: "ai" as const,
+            content: `🔒 Recurring schedules are available on Pro and Business plans. Please upgrade to use this feature.`,
+            platform: data.recurrenceData?.platform,
+            status: "warning" as const,
+          } as any;
+          addMessage(aiMessage);
 
-        // Auto-save conversation
-        if (threadId) {
-          setTimeout(() => {
-            setMessages((currentMessages) => {
-              saveConversation(threadId, currentMessages);
-              return currentMessages;
-            });
-          }, 100);
+          // Auto-save conversation (transient warning will be filtered)
+          if (threadId) {
+            setTimeout(() => {
+              setMessages((currentMessages) => {
+                saveConversation(threadId, currentMessages);
+                return currentMessages;
+              });
+            }, 100);
+          }
+        } else {
+          // Show Recurrence modal for Pro/Business
+          setRecurrenceData(data.recurrenceData);
+          setRecurrenceModalOpen(true);
+          const aiMessage = {
+            sender: "ai" as const,
+            content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
+            platform: data.recurrenceData?.platform,
+          };
+          addMessage(aiMessage);
+
+          // Auto-save conversation
+          if (threadId) {
+            setTimeout(() => {
+              setMessages((currentMessages) => {
+                saveConversation(threadId, currentMessages);
+                return currentMessages;
+              });
+            }, 100);
+          }
         }
       } else if (data.scheduled) {
         const aiMessage = {
@@ -809,6 +835,17 @@ export default function ChatBot() {
         />
       )}
 
+      {/* Upgrade prompt for Basic plan users when they request recurrence */}
+      <UpgradeToProModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        onUpgrade={() => {
+          setUpgradeModalOpen(false);
+          // Navigate to plans/upgrade page (client-side)
+          window.location.href = "/dashboard-select";
+        }}
+      />
+
       {/* History Modal */}
       <HistoryModal
         isOpen={historyModalOpen}
@@ -837,9 +874,19 @@ export default function ChatBot() {
                 <div className="flex flex-col gap-1">
                   {userPlan ? (
                     <div className="flex items-center">
-                      <span className="text-xs font-medium px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
-                        {userPlan.name}
-                      </span>
+                      {userPlan.name?.toLowerCase().includes("basic") ? (
+                        <button
+                          onClick={() => setUpgradeModalOpen(true)}
+                          className="text-xs font-medium px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:opacity-90"
+                          title="Upgrade to Pro"
+                        >
+                          {userPlan.name}
+                        </button>
+                      ) : (
+                        <span className="text-xs font-medium px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg">
+                          {userPlan.name}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <div className="text-xs text-gray-400">Loading plan...</div>

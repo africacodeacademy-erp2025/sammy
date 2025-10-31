@@ -98,10 +98,34 @@ export default function SuccessPage() {
           });
         }
 
-        // Redirect after 2 seconds
-        setTimeout(() => {
+        // Attempt to wait for webhook to update user plan (poll /api/user)
+        const waitForPlanUpdate = async () => {
+          const token = localStorage.getItem("token");
+          const maxAttempts = 6; // ~6 * 1s = 6 seconds
+          for (let i = 0; i < maxAttempts; i++) {
+            try {
+              const uRes = await fetch("/api/user", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (uRes.ok) {
+                const u = await uRes.json();
+                if (u.planId) {
+                  // we have a plan, proceed
+                  return true;
+                }
+              }
+            } catch {}
+            // wait 1s
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+          return false;
+        };
+
+        (async () => {
+          await waitForPlanUpdate();
+          // Redirect back to chatbot after waiting (regardless of result)
           router.push("/chatbot");
-        }, 3000);
+        })();
       } catch (err) {
         console.error(err);
         setError("Error fetching session.");

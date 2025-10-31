@@ -9,9 +9,13 @@ export default function PayButton({ priceId }: { priceId?: string }) {
   async function handlePay() {
     try {
       setLoading(true);
+      const token = localStorage.getItem("token");
       const res = await fetch("/api/payments/stripe/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ priceId }),
       });
       const data = await res.json();

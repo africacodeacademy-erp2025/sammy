@@ -11,6 +11,7 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run worker\"",
     "init:roles": "tsx scripts/initializeRoles.ts",
     "init:admin": "tsx scripts/initializeAdmin.ts",
+  "seed:stripe-price": "tsx scripts/setProPriceId.ts",
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch"
