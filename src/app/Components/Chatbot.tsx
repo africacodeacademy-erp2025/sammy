@@ -476,6 +476,8 @@ export default function ChatBot() {
               ? "Twitter"
               : data.review?.platform === "facebook"
               ? "Facebook"
+              : data.review?.platform === "linkedin"
+              ? "LinkedIn"
               : data.review?.platform;
 
           // Add the draft content as a normal AI message (so it becomes part of the conversation)

@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Twitter, Facebook, MessageSquare, Shield, X } from "lucide-react";
+import {
+  Twitter,
+  Facebook,
+  MessageSquare,
+  Shield,
+  X,
+  Linkedin,
+} from "lucide-react";
 import Badge from "./UI/Badge";
 import Separator from "./UI/Separator";
 import Button from "./UI/Button";
@@ -11,7 +18,7 @@ import CardHeader from "./UI/CardHeader";
 import Card from "./UI/Card";
 
 // ========== Types ==========
-type OAuthPlatform = "twitter" | "facebook" | "slack";
+type OAuthPlatform = "twitter" | "facebook" | "slack" | "linkedin";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -22,18 +29,21 @@ interface PlatformStatus {
   slack: boolean;
   twitter: boolean;
   facebook: boolean;
+  linkedin: boolean;
 }
 
 interface LoadingState {
   twitter: boolean;
   facebook: boolean;
   slack: boolean;
+  linkedin: boolean;
 }
 
 interface MessageState {
   twitter: string;
   facebook: string;
   slack: string;
+  linkedin: string;
 }
 
 // ========== Constants ==========
@@ -52,6 +62,12 @@ const OAUTH_PLATFORMS: Record<
     description:
       "Connect your Facebook page to enable posting and reading content.",
     color: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  },
+  linkedin: {
+    name: "LinkedIn",
+    description:
+      "Connect your LinkedIn account to enable professional posting and content sharing.",
+    color: "bg-blue-600/20 text-blue-400 border-blue-600/30",
   },
   slack: {
     name: "Slack",
@@ -77,16 +93,19 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
     slack: false,
     twitter: false,
     facebook: false,
+    linkedin: false,
   });
   const [loading, setLoading] = useState<LoadingState>({
     twitter: false,
     facebook: false,
     slack: false,
+    linkedin: false,
   });
   const [messages, setMessages] = useState<MessageState>({
     twitter: "",
     facebook: "",
     slack: "",
+    linkedin: "",
   });
   const [isBusinessPlan, setIsBusinessPlan] = useState(false);
 
@@ -181,6 +200,34 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
       }));
       window.history.replaceState({}, "", window.location.pathname);
     }
+
+    // LinkedIn success
+    if (params.get("linkedin_connected") === "true") {
+      setMessages((prev) => ({
+        ...prev,
+        linkedin: "Successfully connected to LinkedIn!",
+      }));
+      setHasCredentials((prev) => ({ ...prev, linkedin: true }));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    // LinkedIn error
+    const linkedinError = params.get("linkedin_error");
+    if (linkedinError) {
+      const errorMessages: Record<string, string> = {
+        missing_params: "Missing authorization parameters",
+        invalid_state: "Invalid state parameter",
+        config_error: "LinkedIn OAuth not properly configured",
+        token_exchange_failed: "Failed to exchange authorization code",
+        no_access_token: "No access token received",
+        callback_error: "An error occurred during authorization",
+      };
+      setMessages((prev) => ({
+        ...prev,
+        linkedin: errorMessages[linkedinError] || `Error: ${linkedinError}`,
+      }));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
   }, []);
 
   // Check platform connection status
@@ -224,10 +271,16 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 user.slack.teamId)
           );
 
+          const linkedinConnected = Boolean(
+            user?.linkedin &&
+              (user.linkedin.accessToken || user.linkedin.refreshToken)
+          );
+
           setHasCredentials({
             twitter: twitterConnected,
             facebook: facebookConnected,
             slack: slackConnected,
+            linkedin: linkedinConnected,
           });
 
           // Determine plan type: if user has planId, try to fetch plan details
@@ -311,6 +364,8 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
         ? "bg-sky-500/20 text-sky-300"
         : platform === "facebook"
         ? "bg-blue-500/20 text-blue-300"
+        : platform === "linkedin"
+        ? "bg-blue-600/20 text-blue-400"
         : "bg-purple-500/20 text-purple-300";
 
     const titleColor =
@@ -318,6 +373,8 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
         ? "text-sky-400"
         : platform === "facebook"
         ? "text-blue-400"
+        : platform === "linkedin"
+        ? "text-blue-500"
         : "text-purple-400";
 
     const connectedColor =
@@ -325,6 +382,8 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
         ? "text-sky-300"
         : platform === "facebook"
         ? "text-blue-300"
+        : platform === "linkedin"
+        ? "text-blue-400"
         : "text-purple-300";
 
     // Determine if message is success or error
@@ -339,6 +398,8 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
         ? Twitter
         : platform === "facebook"
         ? Facebook
+        : platform === "linkedin"
+        ? Linkedin
         : MessageSquare;
 
     return (
@@ -382,7 +443,7 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
                 <span
                   className={`${connectedColor} font-semibold text-sm sm:text-base`}
                 >
-                  Already Connected to {config.name}
+                  Connected
                 </span>
               </div>
             </div>
@@ -463,6 +524,10 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
           <Separator />
 
           <OAuthCard platform="facebook" />
+
+          <Separator />
+
+          <OAuthCard platform="linkedin" />
 
           {isBusinessPlan && (
             <>

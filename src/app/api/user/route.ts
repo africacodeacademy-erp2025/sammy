@@ -22,6 +22,7 @@ export async function GET(req: Request) {
       slack: user.slack ?? null,
       twitter: user.twitter ?? null,
       facebook: user.facebook ?? null,
+      linkedin: user.linkedin ?? null,
     });
   } catch (err) {
     console.error("Error in /api/user:", err);

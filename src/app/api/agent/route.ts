@@ -4,6 +4,7 @@ import { StateGraph, END, START } from "@langchain/langgraph";
 import OpenAI from "openai";
 import { twitterPosting } from "../../../../lib/platforms/twitterPosting";
 import { facebookPosting } from "../../../../lib/platforms/facebookPosting";
+import { linkedinPosting } from "../../../../lib/platforms/linkedinPosting";
 import { connectDB } from "../../../../lib/mongo";
 import { getUserFromRequest } from "../../../../lib/auth";
 import { decrypt } from "../../../../lib/crypto";
@@ -12,6 +13,7 @@ import {
   buildSmartContext,
   shouldUseRAG,
 } from "../../../../lib/contextManager";
+import { getModelConfig } from "../../../../lib/modelConfig";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
@@ -37,11 +39,17 @@ export interface GraphState {
       pageId: string;
       accessToken: string;
     };
+    linkedin?: {
+      accessToken: string;
+      personUrn?: string;
+    };
   };
   authToken?: string;
   isRandomPost?: boolean;
   isGreeting?: boolean;
   attachments?: File[];
+  model?: string;
+  maxTokens?: number;
 }
 
 function detectPlatform(
@@ -53,12 +61,12 @@ function detectPlatform(
   if (normalized.includes("twitter") || normalized.includes("x"))
     return { platform: "twitter" };
   if (normalized.includes("facebook")) return { platform: "facebook" };
+  if (normalized.includes("linkedin")) return { platform: "linkedin" };
 
   // Check for unsupported platforms
   const unsupportedPlatforms = [
     "instagram",
     "tiktok",
-    "linkedin",
     "youtube",
     "snapchat",
     "pinterest",
@@ -73,7 +81,7 @@ function detectPlatform(
       error: `I'd love to help with ${
         detectedUnsupported.charAt(0).toUpperCase() +
         detectedUnsupported.slice(1)
-      } posts, but I currently only support Twitter and Facebook. Try asking me to create a Twitter or Facebook post instead! 🚀`,
+      } posts, but I currently only support Twitter, Facebook, and LinkedIn. Try asking me to create a post for one of these platforms instead! 🚀`,
     };
   }
 
@@ -81,7 +89,7 @@ function detectPlatform(
   return {
     platform: null,
     error:
-      "I couldn't detect which platform you'd like to post to. Please mention 'Twitter' or 'Facebook' in your request. For example: 'Create a Twitter post about...' or 'Write a Facebook post about...' 📱",
+      "I couldn't detect which platform you'd like to post to. Please mention 'Twitter', 'Facebook', or 'LinkedIn' in your request. For example: 'Create a LinkedIn post about...' 📱",
   };
 }
 
@@ -580,7 +588,7 @@ Be intelligent about context clues and implicit time references.`,
 export async function generatePost(
   state: GraphState
 ): Promise<Partial<GraphState>> {
-  const { prompt, userId, platform } = state;
+  const { prompt, userId, platform, model, maxTokens } = state;
 
   if (!userId) {
     console.error("Error: userId is missing from graph state.");
@@ -590,6 +598,14 @@ export async function generatePost(
         "I couldn't identify your account. Please try logging out and back in! 👤",
     };
   }
+
+  // Use model and maxTokens from state, with fallbacks to default (Pro plan values)
+  const selectedModel = model || "gpt-4o-mini";
+  const selectedMaxTokens = maxTokens || 250;
+
+  console.log(
+    `🤖 Using model: ${selectedModel} with max tokens: ${selectedMaxTokens}`
+  );
 
   const db = await connectDB();
   const queryEmbedding = await getEmbedding(prompt);
@@ -745,9 +761,9 @@ IMPORTANT: Follow these platform-specific rules strictly:
     ];
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: selectedModel,
       messages,
-      max_tokens: 250,
+      max_tokens: selectedMaxTokens,
     });
 
     const rawPost = completion.choices[0].message?.content ?? "";
@@ -758,7 +774,7 @@ IMPORTANT: Follow these platform-specific rules strictly:
       console.warn("Generated content failed validation:", validation.reason);
       // Regenerate with stricter guidelines if content is problematic
       const sanitizedCompletion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: selectedModel,
         messages: [
           {
             role: "system",
@@ -773,7 +789,7 @@ IMPORTANT: Follow these platform-specific rules strictly:
               "\n\nPlease ensure the content is clean, professional, and appropriate for a business audience.",
           },
         ],
-        max_tokens: 250,
+        max_tokens: selectedMaxTokens,
       });
       const cleanPost =
         sanitizedCompletion.choices[0].message?.content ?? rawPost;
@@ -852,6 +868,8 @@ const generateWorkflow = new StateGraph<GraphState>({
     success: null,
     error: null,
     userId: null,
+    model: null,
+    maxTokens: null,
   },
 });
 generateWorkflow.addNode("checkGreeting", checkGreeting);
@@ -885,11 +903,17 @@ const postWorkflow = new StateGraph<GraphState>({
 });
 postWorkflow.addNode("twitterPosting", twitterPosting as any);
 postWorkflow.addNode("facebookPosting", facebookPosting as any);
+postWorkflow.addNode("linkedinPosting", linkedinPosting as any);
 postWorkflow.addConditionalEdges(START, (s: GraphState) =>
-  s.platform === "facebook" ? "facebookPosting" : "twitterPosting"
+  s.platform === "facebook"
+    ? "facebookPosting"
+    : s.platform === "linkedin"
+    ? "linkedinPosting"
+    : "twitterPosting"
 );
 postWorkflow.addEdge("twitterPosting" as any, END);
 postWorkflow.addEdge("facebookPosting" as any, END);
+postWorkflow.addEdge("linkedinPosting" as any, END);
 const postApp = postWorkflow.compile();
 
 export async function POST(req: NextRequest) {
@@ -907,6 +931,16 @@ export async function POST(req: NextRequest) {
       );
     }
     const userId = user._id.toString();
+
+    // Fetch user's plan to determine model configuration
+    const db = await connectDB();
+    const userDoc = await db.collection("users").findOne({ _id: user._id });
+    const planId = userDoc?.planId || 1; // Default to Basic plan if no planId
+    const modelConfig = getModelConfig(planId);
+
+    console.log(
+      `👤 User ${userId} | Plan ${planId} | Model: ${modelConfig.model} | Max Tokens: ${modelConfig.maxTokens}`
+    );
 
     // threadId: Optional - if provided, loads conversation history for context
     // conversationHistory: Not used directly here (context loaded from DB via threadId)
@@ -937,7 +971,6 @@ export async function POST(req: NextRequest) {
       (threadId && /^\s*(change)\b/i.test(prompt.trim()))
     ) {
       try {
-        const db = await connectDB();
         const conv = await db.collection("chatHistory").findOne({
           userId,
           threadId,
@@ -1045,12 +1078,14 @@ export async function POST(req: NextRequest) {
       platform: effectivePlatform,
       userId,
       threadId: threadId || undefined, // Pass threadId for conversation context
+      model: modelConfig.model, // Pass selected model based on plan
+      maxTokens: modelConfig.maxTokens, // Pass max tokens based on plan
     });
 
     if (result.success === false)
       return NextResponse.json(result, { status: 400 });
 
-    const db = await connectDB();
+    // db already initialized at the top of POST function, reuse it
 
     // Handle greeting responses
     if (result.isGreeting) {
@@ -1114,9 +1149,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user has credentials for the detected platform
-    const userDoc = await db.collection("users").findOne({ _id: user._id });
+    // userDoc already fetched at the top of POST function, reuse it
     const hasCredentials =
-      effectivePlatform === "twitter" ? userDoc?.twitter : userDoc?.facebook;
+      effectivePlatform === "twitter"
+        ? userDoc?.twitter
+        : effectivePlatform === "facebook"
+        ? userDoc?.facebook
+        : effectivePlatform === "linkedin"
+        ? userDoc?.linkedin
+        : null;
 
     return NextResponse.json({
       success: true,
@@ -1228,6 +1269,12 @@ export async function PUT(req: NextRequest) {
         ? {
             pageId: userDoc.facebook.pageId,
             accessToken: decrypt(userDoc.facebook.accessToken),
+          }
+        : null,
+      linkedin: userDoc?.linkedin?.accessToken
+        ? {
+            accessToken: decrypt(userDoc.linkedin.accessToken),
+            personUrn: userDoc.linkedin.personUrn,
           }
         : null,
       slack: userDoc?.slack?.userAccessToken
