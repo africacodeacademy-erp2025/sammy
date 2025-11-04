@@ -28,8 +28,10 @@ export default function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
   const [showActions, setShowActions] = useState(false);
+  const [showUserActions, setShowUserActions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const userActionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isLatestAiMessage) {
@@ -53,25 +55,33 @@ export default function MessageBubble({
       ) {
         setShowActions(false);
       }
+      if (
+        userActionsRef.current &&
+        !userActionsRef.current.contains(event.target as Node)
+      ) {
+        setShowUserActions(false);
+      }
     };
 
-    if (showActions) {
+    if (showActions || showUserActions) {
       document.addEventListener("mousedown", handleClickOutside);
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [showActions]);
+  }, [showActions, showUserActions]);
 
   const handleSaveEdit = () => {
     if (onEditSave) {
       onEditSave(message.id, editedContent);
     }
     setIsEditing(false);
+    setShowUserActions(false);
   };
 
   const handleCancelEdit = () => {
     setEditedContent(message.content);
     setIsEditing(false);
+    setShowUserActions(false);
   };
 
   const handleApprove = () => {
@@ -271,7 +281,35 @@ export default function MessageBubble({
             : "bg-gradient-to-r from-gray-800/80 to-gray-900/80 text-white backdrop-blur-sm border border-gray-700/50"
         }`}
       >
-        <div className="whitespace-pre-wrap break-words">{editedContent}</div>
+        {isEditing && isUser ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              className="w-full p-2 bg-transparent text-white rounded border-none outline-none text-sm resize-none focus:ring-0"
+              rows={4}
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                className="p-2 rounded-lg bg-transparent border border-gray-500 text-white hover:bg-gray-500/20 transition-colors flex items-center gap-1"
+                onClick={handleCancelEdit}
+                title="Cancel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <button
+                className="p-2 rounded-lg bg-transparent border border-green-500 text-white hover:bg-green-500/20 transition-colors flex items-center gap-1"
+                onClick={handleSaveEdit}
+                title="Save"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap break-words">{editedContent}</div>
+        )}
 
         {message.attachments && message.attachments.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -306,6 +344,15 @@ export default function MessageBubble({
             <span className="text-xs opacity-50">
               {isUser ? "You" : "SaMMy"}
             </span>
+            {isUser && !isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-1 rounded hover:bg-white/10 transition-colors"
+                title="Edit message"
+              >
+                <Edit className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
 

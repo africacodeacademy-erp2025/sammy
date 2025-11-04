@@ -189,19 +189,43 @@ export async function POST(req: NextRequest) {
 
         clearTimeout(timeoutId);
       } catch (fetchError: any) {
-        console.error("LinkedIn API fetch error:", fetchError);
+        console.error("=== LinkedIn API Network Error ===");
+        console.error("Error name:", fetchError.name);
+        console.error("Error code:", fetchError.code);
+        console.error("Error message:", fetchError.message);
+        console.error("Error cause:", fetchError.cause);
+        console.error(
+          "Full error:",
+          JSON.stringify(fetchError, Object.getOwnPropertyNames(fetchError))
+        );
+
+        // Log environment diagnostics
+        console.error("Environment diagnostics:");
+        console.error("- NODE_ENV:", process.env.NODE_ENV);
+        console.error("- Platform:", process.platform);
+        console.error("- Node version:", process.version);
 
         // Check if it's a timeout/connection error
         if (
           fetchError.name === "AbortError" ||
-          fetchError.code === "UND_ERR_CONNECT_TIMEOUT"
+          fetchError.code === "UND_ERR_CONNECT_TIMEOUT" ||
+          fetchError.code === "ETIMEDOUT" ||
+          fetchError.code === "ECONNREFUSED" ||
+          fetchError.code === "ENOTFOUND"
         ) {
           return NextResponse.json(
             {
-              error:
-                "Connection to LinkedIn timed out. This could be due to network issues. Please try again.",
-              details:
-                "The request to LinkedIn's API exceeded the timeout limit. Check your internet connection and firewall settings.",
+              error: "Network error connecting to LinkedIn",
+              errorCode: fetchError.code || fetchError.name,
+              details: fetchError.message,
+              possibleCauses: [
+                "DNS resolution failure (ENOTFOUND)",
+                "Firewall blocking outbound HTTPS connections",
+                "LinkedIn API is unreachable from this server",
+                "Network timeout or connection refused",
+              ],
+              recommendation:
+                "Check server network configuration, firewall rules, and DNS settings. Contact infrastructure team if using cloud hosting.",
             },
             { status: 504 }
           );
@@ -261,14 +285,26 @@ export async function POST(req: NextRequest) {
               console.log("LinkedIn post successful on retry:", retryData);
               return NextResponse.json({ success: true, post: retryData });
             } catch (retryError: any) {
+              console.error("=== LinkedIn API Retry Network Error ===");
+              console.error("Error name:", retryError.name);
+              console.error("Error code:", retryError.code);
+              console.error("Error message:", retryError.message);
+              console.error("Error cause:", retryError.cause);
+
               if (
                 retryError.name === "AbortError" ||
-                retryError.code === "UND_ERR_CONNECT_TIMEOUT"
+                retryError.code === "UND_ERR_CONNECT_TIMEOUT" ||
+                retryError.code === "ETIMEDOUT" ||
+                retryError.code === "ECONNREFUSED" ||
+                retryError.code === "ENOTFOUND"
               ) {
                 return NextResponse.json(
                   {
-                    error:
-                      "Connection to LinkedIn timed out on retry. Please check your network connection.",
+                    error: "Network error on retry",
+                    errorCode: retryError.code || retryError.name,
+                    details: retryError.message,
+                    recommendation:
+                      "Server cannot reach api.linkedin.com. Check network/firewall configuration.",
                   },
                   { status: 504 }
                 );

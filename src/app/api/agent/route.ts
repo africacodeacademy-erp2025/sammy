@@ -418,6 +418,36 @@ export async function generatePost(
     }
   }
 
+  // Additionally, include the raw recent conversation messages (user/assistant)
+  // to ensure the LLM sees the most recent dialog and understands user edits,
+  // clarifications, and follow-ups. This complements the RAG/smart context above.
+  let recentConversationMessages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [];
+  try {
+    if (state.threadId) {
+      const conv = await db.collection("chatHistory").findOne({
+        userId,
+        threadId: state.threadId,
+      });
+      if (conv && Array.isArray(conv.messages) && conv.messages.length > 0) {
+        // Take the last N raw exchanges (default 10) and map to LLM roles
+        const N = 10;
+        const raw = conv.messages.slice(-N);
+        recentConversationMessages = raw
+          .filter((m: any) => m && m.content)
+          .map((m: any) => ({
+            role: m.sender === "ai" ? "assistant" : "user",
+            content: String(m.content),
+          }));
+      }
+    }
+  } catch (err) {
+    // Non-fatal: log and continue
+    console.error("Error loading recent conversation messages:", err);
+  }
+
   try {
     // --- 1. Retrieve context from Slack messages (RAG) ---
     const contextResults = await db
@@ -520,7 +550,8 @@ IMPORTANT: Follow these platform-specific rules strictly:
       isRandomPost = true;
     }
 
-    // Build messages array with conversation context
+    // Build messages array with conversation context + recent raw messages
+    // We include: system message -> RAG/smart context -> recent raw messages -> current user message
     const messages: Array<{
       role: "system" | "user" | "assistant";
       content: string;
@@ -529,8 +560,10 @@ IMPORTANT: Follow these platform-specific rules strictly:
         role: "system",
         content: systemMessage,
       },
-      // Include conversation history for context continuity
+      // Include RAG / smart context (condensed, relevant snippets)
       ...conversationContext,
+      // Include the most recent raw conversation messages so the LLM sees the exact recent dialog
+      ...recentConversationMessages,
       // Add current user message
       {
         role: "user",
@@ -601,12 +634,8 @@ IMPORTANT: Follow these platform-specific rules strictly:
         sanitizedPost = `Here's a curated post for your ${platform} audience. Configure your sources and platforms for better content generation.`;
       }
 
-      const finalPost = isRandomPost
-        ? `${sanitizedPost}\n\n💡 Configure sources and platforms for curated posts`
-        : sanitizedPost;
-
       return {
-        post: finalPost,
+        post: sanitizedPost,
         threadId: generateThreadId(),
         platform: platform,
         success: true,
@@ -617,12 +646,8 @@ IMPORTANT: Follow these platform-specific rules strictly:
     // Apply platform-specific sanitization
     const sanitizedPost = sanitizeForPlatform(rawPost, platform);
 
-    const finalPost = isRandomPost
-      ? `${sanitizedPost}\n\n💡 Configure sources and platforms for curated posts`
-      : sanitizedPost;
-
     return {
-      post: finalPost,
+      post: sanitizedPost,
       threadId: generateThreadId(),
       platform: platform,
       success: true,
