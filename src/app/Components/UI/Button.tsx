@@ -2,7 +2,7 @@
 import React from "react";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "destructive";
 };
 
 export default function Button({
@@ -18,7 +18,14 @@ export default function Button({
   `;
   const gradientClasses =
     "bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 active:from-blue-700 active:to-purple-700 text-white";
-  const variantClasses = variant === "primary" ? gradientClasses : "";
+  const destructiveClasses =
+    "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 active:from-red-700 active:to-red-800 text-white";
+  const variantClasses =
+    variant === "primary"
+      ? gradientClasses
+      : variant === "destructive"
+      ? destructiveClasses
+      : "";
 
   return (
     <button

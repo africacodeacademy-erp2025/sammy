@@ -2,7 +2,7 @@
 
 **🌐 Live App:** https://sammy.africacodefoundry.com/
 
-**SaMMy** is an intelligent social media management platform that generates, schedules, and posts AI-powered content to Twitter/X and Facebook. Built with Next.js 15, LangGraph state machines, and OpenAI, it provides seamless OAuth integration, automatic context learning, and intelligent content generation based on your past posts and messaging style.
+**SaMMy** is an intelligent social media management platform that generates, schedules, and posts AI-powered content to Twitter/X, Facebook, and LinkedIn. Built with Next.js 15, LangGraph state machines, and OpenAI, it provides seamless OAuth integration, automatic context learning, and intelligent content generation based on your past posts and messaging style.
 
 #### 📅 Scheduling System
 
@@ -400,7 +400,7 @@ For issues, questions, or contributions:
 
 ## ✨ Key Features
 
-- 🔐 **One-Click OAuth 2.0** - Connect Twitter, Facebook, and Slack accounts with secure OAuth flows (no manual API keys!)
+- 🔐 **One-Click OAuth 2.0** - Connect Twitter, Facebook, LinkedIn, and Slack accounts with secure OAuth flows (no manual API keys!)
 - 🔑 **Complete Authentication System** - Secure user registration, login, password reset with email verification, and profile management
 - 🤖 **AI Content Generation** - OpenAI-powered post creation with context-aware drafting
 - 📊 **Automatic Context Learning** - Pulls and analyzes your past posts and Slack messages to match your writing style
@@ -409,7 +409,7 @@ For issues, questions, or contributions:
 - 📜 **Conversation History** - Save, load, and manage past AI chat conversations with full context restoration
 - ✅ **Review & Approve Workflow** - Preview generated posts before publishing
 - 🔒 **Enterprise Security** - AES-256-GCM encryption for all credentials and tokens
-- 🚀 **Multi-Platform** - Simultaneous posting to Twitter/X and Facebook
+- 🚀 **Multi-Platform** - Simultaneous posting to Twitter/X, Facebook, and LinkedIn
 - 💬 **Slack Integration** - Automatic message ingestion for context learning with real-time webhook support
 - 📱 **Modern Stack** - Next.js 15, React 19, TypeScript, Tailwind CSS
 - 📧 **Email Notifications** - Password reset emails with Gmail SMTP integration
@@ -423,6 +423,7 @@ SaMMy uses **OAuth 2.0 exclusively** for all platform integrations:
 
 - **Twitter/X**: OAuth 2.0 with PKCE (no API keys needed)
 - **Facebook**: OAuth 2.0 with proper scopes
+- **LinkedIn**: OAuth 2.0 with OpenID Connect
 - **Slack**: OAuth 2.0 with workspace-level permissions
 - **No Manual Tokens**: All credentials obtained through secure OAuth flows
 - **Encrypted Storage**: All tokens encrypted with AES-256-GCM before database storage
@@ -464,6 +465,22 @@ cp .env.example .env
    - **Production:** `https://sammy.africacodefoundry.com/api/integrations/facebook/callback`
    - **Development:** `http://localhost:3000/api/integrations/facebook/callback`
 5. Copy App ID and App Secret to `.env`
+
+**LinkedIn:**
+
+1. Go to [LinkedIn Developers](https://www.linkedin.com/developers/apps/)
+2. Create a new app or select existing app
+3. Add "Sign In with LinkedIn using OpenID Connect" product
+4. Add OAuth 2.0 settings:
+   - **Authorized redirect URLs:**
+     - **Production:** `https://sammy.africacodefoundry.com/api/integrations/linkedin/callback`
+     - **Development:** `http://localhost:3000/api/integrations/linkedin/callback`
+5. Request OAuth 2.0 scopes:
+   - `openid` - OpenID Connect authentication
+   - `profile` - Access to profile information
+   - `email` - Access to email address
+   - `w_member_social` - Share content on behalf of the user
+6. Copy Client ID and Client Secret to `.env`
 
 **Slack (Optional - for context ingestion):**
 
@@ -537,8 +554,8 @@ Check your email for the password reset link. The system will also log fallback 
 ### User Flow
 
 1. **Sign Up / Login** - Create account with email/password (JWT authentication)
-2. **Connect Platforms** - One-click OAuth for Twitter, Facebook, and Slack
-3. **Automatic Learning** - System automatically pulls your recent posts (10 tweets, 5 Facebook posts) and Slack messages from connected channels
+2. **Connect Platforms** - One-click OAuth for Twitter, Facebook, LinkedIn, and Slack
+3. **Automatic Learning** - System automatically pulls your recent posts (10 tweets, 5 Facebook posts, LinkedIn posts) and Slack messages from connected channels
 4. **Generate Content** - Chat with AI to create posts: "Create a Twitter post about AI trends"
 5. **Review & Approve** - Preview generated content before publishing
 6. **Schedule or Post** - Post immediately or schedule for later
@@ -584,6 +601,7 @@ Check your email for the password reset link. The system will also log fallback 
 
 - Twitter: Fetches 10 most recent tweets on OAuth connection
 - Facebook: Fetches 5 most recent posts on OAuth connection
+- LinkedIn: Fetches recent posts on OAuth connection
 - Slack: Fetches recent messages from channels where bot is a member (3 messages per channel)
 - Runs in background without blocking user experience
 - Generates embeddings for semantic search
@@ -598,19 +616,19 @@ Check your email for the password reset link. The system will also log fallback 
 
 ## 🛠️ Technology Stack
 
-| Category             | Technologies                                                                |
-| -------------------- | --------------------------------------------------------------------------- |
-| **Frontend**         | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS                 |
-| **AI & LLM**         | OpenAI GPT (content generation), OpenAI Embeddings (text-embedding-3-small) |
-| **State Management** | LangGraph (StateGraph for AI workflows)                                     |
-| **Database**         | MongoDB Atlas with Vector Search (`vector_index` for embeddings)            |
-| **Authentication**   | JWT tokens, bcrypt password hashing                                         |
-| **Security**         | AES-256-GCM encryption for OAuth tokens and credentials                     |
-| **OAuth 2.0**        | Twitter API v2 (with PKCE), Facebook Graph API v21.0, Slack Web API         |
-| **Background Jobs**  | Agenda 5.0.0 + MongoDB (scheduled & recurring post processing)              |
-| **API Integrations** | Twitter API v2, Facebook Graph API, Slack Web API (OAuth 2.0)               |
-| **Testing**          | Jest, @testing-library/react                                                |
-| **Dev Tools**        | Turbopack, ESLint, TypeScript strict mode, concurrently                     |
+| Category             | Technologies                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| **Frontend**         | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS                          |
+| **AI & LLM**         | OpenAI GPT (content generation), OpenAI Embeddings (text-embedding-3-small)          |
+| **State Management** | LangGraph (StateGraph for AI workflows)                                              |
+| **Database**         | MongoDB Atlas with Vector Search (`vector_index` for embeddings)                     |
+| **Authentication**   | JWT tokens, bcrypt password hashing                                                  |
+| **Security**         | AES-256-GCM encryption for OAuth tokens and credentials                              |
+| **OAuth 2.0**        | Twitter API v2 (with PKCE), Facebook Graph API v21.0, LinkedIn API v2, Slack Web API |
+| **Background Jobs**  | Agenda 5.0.0 + MongoDB (scheduled & recurring post processing)                       |
+| **API Integrations** | Twitter API v2, Facebook Graph API, LinkedIn API v2, Slack Web API (OAuth 2.0)       |
+| **Testing**          | Jest, @testing-library/react                                                         |
+| **Dev Tools**        | Turbopack, ESLint, TypeScript strict mode, concurrently                              |
 
 ## 🏗️ Architecture Overview
 
@@ -629,15 +647,15 @@ AES-256-GCM Encrypted Credential Storage
 ### OAuth 2.0 Connection Flow
 
 ```
-User clicks "Connect X Account" / "Connect Facebook" / "Connect Slack"
+User clicks "Connect X Account" / "Connect Facebook" / "Connect LinkedIn" / "Connect Slack"
     ↓
-Redirect to OAuth Provider (Twitter/Facebook/Slack)
+Redirect to OAuth Provider (Twitter/Facebook/LinkedIn/Slack)
     ↓
 User Authorizes Application
     ↓
 OAuth Callback with Authorization Code
     ↓
-Exchange Code for Access Token (+ Refresh Token for Twitter)
+Exchange Code for Access Token (+ Refresh Token for Twitter/LinkedIn)
     ↓
 Encrypt & Store Tokens in MongoDB
     ↓
@@ -645,7 +663,7 @@ Encrypt & Store Tokens in MongoDB
     ↓
 Generate Embeddings with OpenAI
     ↓
-Save to past_posts Collection (Twitter/Facebook) or messages Collection (Slack)
+Save to past_posts Collection (Twitter/Facebook/LinkedIn) or messages Collection (Slack)
     ↓
 User Redirected to App (Connection Complete)
 ```
@@ -722,8 +740,11 @@ extractScheduleTime → [if scheduled] → END
 | GET | `/api/integrations/facebook/oauth` | Initiate Facebook OAuth flow |
 | GET | `/api/integrations/facebook/callback` | Facebook OAuth callback (exchanges code for tokens) |
 | POST | `/api/integrations/facebook/connect` | Manually store Facebook credentials (legacy) |
+| GET | `/api/integrations/linkedin/oauth` | Initiate LinkedIn OAuth 2.0 flow |
+| GET | `/api/integrations/linkedin/callback` | LinkedIn OAuth callback (exchanges code for tokens) |
 | GET | `/api/integrations/slack/oauth` | Initiate Slack OAuth 2.0 flow |
 | GET | `/api/integrations/slack/callback` | Slack OAuth callback (exchanges code for tokens) |
+| DELETE | `/api/integrations/disconnect` | Disconnect a platform integration (Twitter/Facebook/LinkedIn/Slack) |
 
 ### Content Generation & Posting
 | Method | Endpoint | Description |
@@ -732,6 +753,7 @@ extractScheduleTime → [if scheduled] → END
 | PUT | `/api/agent` | Approve & publish draft to platform |
 | POST | `/api/postings/x-posting` | Internal Twitter posting endpoint |
 | POST | `/api/postings/fb-posting` | Internal Facebook posting endpoint |
+| POST | `/api/postings/linkedin-posting` | Internal LinkedIn posting endpoint |
 
 ### Content Management
 | Method | Endpoint | Description |
@@ -740,6 +762,7 @@ extractScheduleTime → [if scheduled] → END
 | DELETE | `/api/scheduledposts?id=<id>` | Delete scheduled post |
 | GET | `/api/pulling/x-pulling` | Pull & embed recent tweets |
 | GET | `/api/pulling/fb-pulling` | Pull & embed recent Facebook posts |
+| GET | `/api/pulling/linkedin-pulling` | Pull & embed recent LinkedIn posts |
 
 ### Recurring Posts Management
 | Method | Endpoint | Description |
@@ -876,6 +899,15 @@ FACEBOOK_APP_SECRET=your_facebook_app_secret
 FACEBOOK_REDIRECT_URI=http://localhost:3000/api/integrations/facebook/callback
 
 # ============================================
+# LinkedIn OAuth 2.0
+# ============================================
+LINKEDIN_CLIENT_ID=your_linkedin_oauth2_client_id
+LINKEDIN_CLIENT_SECRET=your_linkedin_oauth2_client_secret
+# Production: https://sammy.africacodefoundry.com/api/integrations/linkedin/callback
+# Development: http://localhost:3000/api/integrations/linkedin/callback
+LINKEDIN_REDIRECT_URI=http://localhost:3000/api/integrations/linkedin/callback
+
+# ============================================
 # Slack OAuth 2.0 (Optional - for context ingestion)
 # ============================================
 SLACK_CLIENT_ID=your_slack_oauth2_client_id
@@ -905,7 +937,7 @@ SMTP_PASS=your_gmail_app_password
 
   - **Production:** `https://sammy.africacodefoundry.com/api/integrations/{platform}/callback`
   - **Development:** `http://localhost:3000/api/integrations/{platform}/callback`
-  - Replace `{platform}` with `twitter`, `facebook`, or `slack`
+  - Replace `{platform}` with `twitter`, `facebook`, `linkedin`, or `slack`
 
 - **Gmail SMTP Configuration**:
 
@@ -1219,6 +1251,10 @@ curl -X GET "http://localhost:3000/api/pulling/x-pulling?count=10" \
 curl -X GET "http://localhost:3000/api/pulling/fb-pulling?count=5" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 
+# Pull recent LinkedIn posts
+curl -X GET "http://localhost:3000/api/pulling/linkedin-pulling" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
 # Fetch Slack messages for context (from connected channels)
 curl -X GET "http://localhost:3000/api/sources/slack" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
@@ -1250,11 +1286,10 @@ curl -X POST http://localhost:3000/api/recurring-posts \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "platform": "twitter",
-    "prompt": "Share a daily productivity tip",
-    "frequency": "daily",
-    "time": "09:00",
-    "selectedDays": [1, 2, 3, 4, 5]
+    "platform": "linkedin",
+    "prompt": "Share a professional insight about software development",
+    "frequency": "weekly",
+    "time": "10:00"
   }'
 ```
 
@@ -1266,12 +1301,11 @@ curl -X POST http://localhost:3000/api/recurring-posts \
   "recurringPost": {
     "_id": "671234567890abcdef123456",
     "userId": "507f1f77bcf86cd799439011",
-    "platform": "twitter",
-    "prompt": "Share a daily productivity tip",
-    "frequency": "daily",
-    "time": "09:00",
-    "selectedDays": [1, 2, 3, 4, 5],
-    "nextOccurrence": "2025-10-16T09:00:00.000Z",
+    "platform": "linkedin",
+    "prompt": "Share a professional insight about software development",
+    "frequency": "weekly",
+    "time": "10:00",
+    "nextOccurrence": "2025-10-16T10:00:00.000Z",
     "isActive": true,
     "createdAt": "2025-10-15T10:30:00.000Z"
   }
@@ -1293,12 +1327,11 @@ curl -X GET http://localhost:3000/api/recurring-posts \
   "recurringPosts": [
     {
       "_id": "671234567890abcdef123456",
-      "platform": "twitter",
-      "prompt": "Share a daily productivity tip",
-      "frequency": "daily",
-      "time": "09:00",
-      "selectedDays": [1, 2, 3, 4, 5],
-      "nextOccurrence": "2025-10-16T09:00:00.000Z",
+      "platform": "linkedin",
+      "prompt": "Share a professional insight about software development",
+      "frequency": "weekly",
+      "time": "10:00",
+      "nextOccurrence": "2025-10-16T10:00:00.000Z",
       "isActive": true,
       "createdAt": "2025-10-15T10:30:00.000Z"
     }
@@ -1372,6 +1405,12 @@ curl -X DELETE "http://localhost:3000/api/recurring-posts?id=671234567890abcdef1
     teamName?: string,
     userId?: string
   },
+  linkedin?: {
+    accessToken?: string, // Encrypted
+    refreshToken?: string, // Encrypted
+    expiresAt?: Date,
+    personUrn?: string // LinkedIn person URN (urn:li:person:xxx)
+  },
   createdAt: Date,
   updatedAt: Date
 }
@@ -1386,7 +1425,7 @@ curl -X DELETE "http://localhost:3000/api/recurring-posts?id=671234567890abcdef1
   postId: string, // Platform's post ID
   message: string, // Post content
   embedding: number[], // 1536-dim vector (OpenAI text-embedding-3-small)
-  platform: "twitter" | "facebook",
+  platform: "twitter" | "facebook" | "linkedin",
   createdAt: Date
 }
 ```
@@ -1413,7 +1452,7 @@ curl -X DELETE "http://localhost:3000/api/recurring-posts?id=671234567890abcdef1
   _id: ObjectId,
   userId: string,
   prompt: string,
-  platform: "twitter" | "facebook",
+  platform: "twitter" | "facebook" | "linkedin",
   scheduleTime: Date,
   status: "scheduled" | "ready_for_review" | "posted" | "failed",
   post?: string, // Generated content
@@ -1432,7 +1471,7 @@ curl -X DELETE "http://localhost:3000/api/recurring-posts?id=671234567890abcdef1
 {
   _id: ObjectId,
   userId: string,
-  platform: "twitter" | "facebook",
+  platform: "twitter" | "facebook" | "linkedin",
   prompt: string, // Template prompt for content generation
   frequency: "daily" | "weekly" | "monthly",
   time: string, // "HH:mm" format (24-hour)

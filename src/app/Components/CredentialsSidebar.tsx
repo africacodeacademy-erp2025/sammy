@@ -8,6 +8,7 @@ import {
   Shield,
   X,
   Linkedin,
+  Trash2,
 } from "lucide-react";
 import Badge from "./UI/Badge";
 import Separator from "./UI/Separator";
@@ -106,6 +107,12 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
     facebook: "",
     slack: "",
     linkedin: "",
+  });
+  const [disconnecting, setDisconnecting] = useState<LoadingState>({
+    twitter: false,
+    facebook: false,
+    slack: false,
+    linkedin: false,
   });
   const [isBusinessPlan, setIsBusinessPlan] = useState(false);
 
@@ -352,11 +359,75 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
     }
   };
 
+  // Handle platform disconnection
+  const handleDisconnect = async (platform: OAuthPlatform) => {
+    if (
+      !confirm(
+        `Are you sure you want to disconnect ${OAUTH_PLATFORMS[platform].name}? This will remove all stored credentials.`
+      )
+    ) {
+      return;
+    }
+
+    setDisconnecting((prev) => ({ ...prev, [platform]: true }));
+    setMessages((prev) => ({
+      ...prev,
+      [platform]: `Disconnecting ${OAUTH_PLATFORMS[platform].name}...`,
+    }));
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
+
+      const response = await fetch("/api/integrations/disconnect", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ platform }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to disconnect");
+      }
+
+      // Update state to reflect disconnection
+      setHasCredentials((prev) => ({ ...prev, [platform]: false }));
+      setMessages((prev) => ({
+        ...prev,
+        [platform]: `Successfully disconnected from ${OAUTH_PLATFORMS[platform].name}`,
+      }));
+
+      // Clear message after 3 seconds
+      setTimeout(() => {
+        setMessages((prev) => ({ ...prev, [platform]: "" }));
+      }, 3000);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to disconnect. Please try again.";
+      console.error(`Failed to disconnect ${platform}:`, err);
+      setMessages((prev) => ({
+        ...prev,
+        [platform]: errorMessage,
+      }));
+    } finally {
+      setDisconnecting((prev) => ({ ...prev, [platform]: false }));
+    }
+  };
+
   // Reusable OAuth Card Component
   const OAuthCard = ({ platform }: { platform: OAuthPlatform }) => {
     const config = OAUTH_PLATFORMS[platform];
     const isConnected = hasCredentials[platform];
     const isLoading = loading[platform];
+    const isDisconnecting = disconnecting[platform];
     const message = messages[platform];
 
     const badgeColor =
@@ -422,29 +493,45 @@ export default function CredentialsSidebar({ isOpen, onClose }: SidebarProps) {
 
           {isConnected ? (
             <div
-              className="w-full bg-gray-800/50 rounded-lg p-4 text-center border border-gray-700/50"
+              className="w-full bg-gray-800/50 rounded-lg p-4 border border-gray-700/50"
               role="status"
               aria-label={`${config.name} connected successfully`}
             >
-              <div className="flex items-center justify-center gap-2">
-                <svg
-                  className="w-5 h-5 text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5 text-green-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  <span
+                    className={`${connectedColor} font-semibold text-sm sm:text-base`}
+                  >
+                    Connected
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => handleDisconnect(platform)}
+                  disabled={isDisconnecting}
+                  className="p-2 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label={`Disconnect ${config.name}`}
+                  title="Disconnect"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                <span
-                  className={`${connectedColor} font-semibold text-sm sm:text-base`}
-                >
-                  Connected
-                </span>
+                  {isDisconnecting ? (
+                    <span className="text-xs">...</span>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
           ) : (

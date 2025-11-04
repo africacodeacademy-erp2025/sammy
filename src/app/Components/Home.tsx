@@ -201,7 +201,7 @@ export default function Home() {
 
             <FeatureCard
               title="Multi-Platform Integration"
-              description="Connect Slack, Twitter/X, and Facebook accounts. Let SaMMy manage everything with just a single prompt."
+              description="Connect Slack, Twitter/X, Facebook and LinkedIn accounts. Let SaMMy manage everything with just a single prompt."
               gradientFrom="blue-500"
               gradientTo="pink-500"
               icon={

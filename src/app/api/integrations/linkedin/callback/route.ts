@@ -293,36 +293,133 @@ export async function GET(req: NextRequest) {
     let personUrn: string | undefined;
     try {
       console.log("Fetching LinkedIn profile to get personUrn...");
-      const profileResponse = await fetch(
-        "https://api.linkedin.com/v2/userinfo",
-        {
-          headers: {
-            Authorization: `Bearer ${access_token}`,
-          },
-        }
-      );
 
-      if (profileResponse.ok) {
-        const profileData = await profileResponse.json();
-        console.log("LinkedIn profile data:", profileData);
+      // Retry logic with timeout for network issues
+      const maxRetries = 3;
+      const timeout = 30000; // 30 seconds
 
-        // LinkedIn userinfo returns 'sub' field with the person ID
-        if (profileData.sub) {
-          personUrn = `urn:li:person:${profileData.sub}`;
-          console.log("✅ LinkedIn personUrn obtained:", personUrn);
-        } else {
-          console.error("❌ No 'sub' field in LinkedIn profile response");
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+          console.log(
+            `Attempt ${attempt}/${maxRetries} to fetch LinkedIn profile...`
+          );
+
+          const profileResponse = await fetch(
+            "https://api.linkedin.com/v2/userinfo",
+            {
+              headers: {
+                Authorization: `Bearer ${access_token}`,
+                "User-Agent": "SammyApp/1.0",
+              },
+              signal: controller.signal,
+            }
+          );
+
+          clearTimeout(timeoutId);
+
+          if (profileResponse.ok) {
+            const profileData = await profileResponse.json();
+            console.log("LinkedIn profile data:", profileData);
+
+            // LinkedIn userinfo returns 'sub' field with the person ID
+            if (profileData.sub) {
+              personUrn = `urn:li:person:${profileData.sub}`;
+              console.log("✅ LinkedIn personUrn obtained:", personUrn);
+              break; // Success - exit retry loop
+            } else {
+              console.error("❌ No 'sub' field in LinkedIn profile response");
+              break; // No point retrying if response is missing sub field
+            }
+          } else {
+            const errorText = await profileResponse.text();
+            console.error(
+              "❌ LinkedIn profile fetch failed:",
+              profileResponse.status,
+              errorText
+            );
+
+            // Retry on server errors (5xx) but not on client errors (4xx)
+            if (profileResponse.status >= 500 && attempt < maxRetries) {
+              console.log(`Server error, retrying in ${attempt * 1000}ms...`);
+              await new Promise((resolve) =>
+                setTimeout(resolve, attempt * 1000)
+              );
+              continue;
+            }
+            break;
+          }
+        } catch (fetchError: any) {
+          console.error(`Attempt ${attempt} failed:`, {
+            name: fetchError?.name,
+            message: fetchError?.message,
+            code: fetchError?.code,
+            cause: fetchError?.cause,
+          });
+
+          // Check if it's a timeout/network error that we should retry
+          const isRetryableError =
+            fetchError?.name === "AbortError" ||
+            fetchError?.code === "ETIMEDOUT" ||
+            fetchError?.code === "ECONNREFUSED" ||
+            fetchError?.code === "ENOTFOUND" ||
+            fetchError?.code === "UND_ERR_CONNECT_TIMEOUT";
+
+          if (isRetryableError && attempt < maxRetries) {
+            console.log(`Network error, retrying in ${attempt * 1000}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+            continue;
+          }
+
+          // Last attempt or non-retryable error
+          if (attempt === maxRetries) {
+            throw fetchError;
+          }
         }
-      } else {
-        const errorText = await profileResponse.text();
-        console.error(
-          "❌ LinkedIn profile fetch failed:",
-          profileResponse.status,
-          errorText
-        );
       }
     } catch (profileError) {
-      console.error("❌ Error fetching LinkedIn profile:", profileError);
+      console.error(
+        "❌ Error fetching LinkedIn profile after all retries:",
+        profileError
+      );
+    }
+
+    // If personUrn is still not obtained, try alternative v2/me endpoint as fallback
+    if (!personUrn) {
+      console.log("⚠️ Trying fallback v2/me endpoint...");
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const meResponse = await fetch("https://api.linkedin.com/v2/me", {
+          headers: {
+            Authorization: `Bearer ${access_token}`,
+            "User-Agent": "SammyApp/1.0",
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (meResponse.ok) {
+          const meData = await meResponse.json();
+          console.log("LinkedIn v2/me data:", meData);
+
+          if (meData.id) {
+            personUrn = `urn:li:person:${meData.id}`;
+            console.log(
+              "✅ LinkedIn personUrn obtained from v2/me:",
+              personUrn
+            );
+          }
+        } else {
+          console.error("❌ v2/me fallback also failed:", meResponse.status);
+        }
+      } catch (fallbackError) {
+        console.error("❌ v2/me fallback error:", fallbackError);
+      }
     }
 
     // If personUrn is still not obtained, log a warning
