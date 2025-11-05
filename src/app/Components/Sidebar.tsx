@@ -90,7 +90,10 @@ export default function Sidebar({
             icon={<Key className="w-5 h-5 text-green-400" />}
           />
 
-          <PayButton priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID} />
+          <PayButton
+            priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID}
+            planId={2}
+          />
         </div>
 
         {/* Footer spacer (no logout) */}

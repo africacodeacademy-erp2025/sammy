@@ -3,20 +3,32 @@
 import { useState } from "react";
 import SidebarButton from "./SidebarButton";
 
-export default function PayButton({ priceId }: { priceId?: string }) {
+export default function PayButton({
+  priceId,
+  planId,
+}: {
+  priceId?: string;
+  planId?: number | string;
+}) {
   const [loading, setLoading] = useState(false);
 
   async function handlePay() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
+
+      // Build request body with available identifiers
+      const body: any = {};
+      if (priceId) body.priceId = priceId;
+      if (planId !== undefined) body.planId = planId;
+
       const res = await fetch("/api/payments/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ priceId }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data?.url) {
