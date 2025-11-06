@@ -6,8 +6,13 @@ import { connectDB } from "../../../../../../lib/mongo";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    console.log("Checkout request body:", body);
+
     let priceId = body?.priceId || process.env.STRIPE_PRICE_ID!;
     const planId = body?.planId;
+
+    console.log("Extracted planId:", planId, "type:", typeof planId);
+    console.log("Extracted priceId:", priceId);
 
     // If planId is provided, look up the plan in database to get price info
     let planDoc: any = null;
@@ -25,15 +30,13 @@ export async function POST(req: Request) {
           planDoc = await plans.findOne({ planId: Number(planId) });
         }
 
-        // If plan has a priceId, use it
-        if (planDoc && planDoc.priceId) {
-          priceId = planDoc.priceId;
-        }
+        console.log("Found plan document:", planDoc);
       } catch (err) {
         console.error("Error looking up plan:", err);
       }
     }
 
+    // Require either a valid plan document or a priceId
     if (!priceId && !planDoc) {
       return NextResponse.json(
         { error: "Missing priceId or planId" },
@@ -56,13 +59,20 @@ export async function POST(req: Request) {
     // Initialize Stripe at runtime
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-    // Build line items - use price_data if we have plan info to show name and price
+    // Build line items - prioritize using plan data from database
     let line_items: any[] = [];
-    if (planDoc && planDoc.price && planDoc.name) {
-      // Use price_data to show plan name and price on checkout
+    if (planDoc && planDoc.price != null && planDoc.name) {
+      // Use price_data to show plan name, description and price on checkout
       const currency = planDoc.currency || "usd";
       const unit_amount = Math.round(Number(planDoc.price) * 100); // Convert to cents
       const interval = planDoc.interval || "month";
+
+      console.log("Creating checkout with plan data:", {
+        name: planDoc.name,
+        price: planDoc.price,
+        unit_amount,
+        description: planDoc.description,
+      });
 
       line_items = [
         {
@@ -78,9 +88,15 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ];
-    } else {
-      // Fallback to existing priceId behavior
+    } else if (priceId) {
+      // Fallback to existing priceId behavior (for legacy/env-based pricing)
+      console.log("Using fallback priceId:", priceId);
       line_items = [{ price: priceId, quantity: 1 }];
+    } else {
+      return NextResponse.json(
+        { error: "No valid price data available" },
+        { status: 400 }
+      );
     }
 
     // Calculate next billing date (start immediately, no trial)

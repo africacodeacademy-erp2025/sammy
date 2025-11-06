@@ -17,6 +17,7 @@ export default function Sidebar({
   onManageCredentials: () => void;
 }) {
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userPlanId, setUserPlanId] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchUser() {
@@ -28,7 +29,22 @@ export default function Sidebar({
         });
         if (res.ok) {
           const data = await res.json();
+          console.log("Fetched user data:", data);
+
           setUserEmail(data.email);
+
+          // Handle planId as either string or number
+          if (data.planId != null) {
+            const planIdNum =
+              typeof data.planId === "number"
+                ? data.planId
+                : parseInt(data.planId, 10);
+
+            if (!isNaN(planIdNum)) {
+              setUserPlanId(planIdNum);
+              console.log("Set userPlanId to:", planIdNum);
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to load user:", err);
@@ -92,11 +108,9 @@ export default function Sidebar({
 
           <PayButton
             priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID}
-            planId={2}
+            planId={userPlanId ?? undefined}
           />
         </div>
-
-        {/* Footer spacer (no logout) */}
         <div className="p-2" />
       </div>
     </>

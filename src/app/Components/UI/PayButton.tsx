@@ -6,9 +6,13 @@ import SidebarButton from "./SidebarButton";
 export default function PayButton({
   priceId,
   planId,
+  title,
+  description,
 }: {
   priceId?: string;
   planId?: number | string;
+  title?: string;
+  description?: string;
 }) {
   const [loading, setLoading] = useState(false);
 
@@ -21,6 +25,8 @@ export default function PayButton({
       const body: any = {};
       if (priceId) body.priceId = priceId;
       if (planId !== undefined) body.planId = planId;
+
+      console.log("PayButton sending body:", body);
 
       const res = await fetch("/api/payments/stripe/checkout", {
         method: "POST",
@@ -47,8 +53,10 @@ export default function PayButton({
   return (
     <SidebarButton
       onClick={handlePay}
-      title="Subscribe"
-      description={loading ? "Redirecting…" : "Pay your subscription"}
+      title={title || "Subscribe"}
+      description={
+        loading ? "Redirecting…" : description || "Pay your subscription"
+      }
       icon={<span className="text-purple-400">💳</span>}
       className="bg-gray-800 hover:bg-gray-800/70"
     />

@@ -137,7 +137,7 @@ export default function Home() {
       {!hasToken && view !== "home" && (
         <div
           ref={formRef}
-          className="px-6 md:px-20 py-16 mb-20 max-w-xl mx-auto flex flex-col gap-8"
+          className="px-6 md:px-20 py-16 mb-20 w-full max-w-[95vw] sm:max-w-2xl md:max-w-3xl mx-auto flex flex-col gap-8"
         >
           {view === "login" && (
             <Login

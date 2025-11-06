@@ -34,41 +34,48 @@ export async function GET(req: NextRequest) {
         const users = db.collection("users");
         const plans = db.collection("plans");
 
-        let planDoc = null;
-        if (priceId) {
-          planDoc = await plans.findOne({ priceId: priceId });
-        }
+        // Get metadata planId (the plan user is trying to subscribe to)
+        const targetPlanId = metadata.planId ? Number(metadata.planId) : null;
 
-        if (planDoc) {
+        // Get current user to check their existing planId
+        const currentUser = await users.findOne({
+          _id: new (require("mongodb").ObjectId)(userId),
+        });
+
+        const currentPlanId =
+          typeof currentUser?.planId === "number" ? currentUser.planId : null;
+
+        console.log(
+          `Session finalize: User ${userId} current plan: ${currentPlanId}, target plan: ${targetPlanId}`
+        );
+
+        // ONLY update planId if it's different (actual upgrade/downgrade)
+        // Don't update if user is just paying for their current subscription
+        if (targetPlanId && targetPlanId !== currentPlanId) {
           await users.updateOne(
             { _id: new (require("mongodb").ObjectId)(userId) },
             {
               $set: {
-                planId: planDoc._id,
+                planId: targetPlanId, // Use numeric planId, NOT _id
                 stripeSubscriptionId: (session as any).subscription?.id || null,
               },
             }
           );
           console.log(
-            `Session finalize: Updated user ${userId} to plan ${planDoc._id}`
-          );
-        } else if (process.env.PRO_PLAN_ID) {
-          const fallback = process.env.PRO_PLAN_ID!;
-          await users.updateOne(
-            { _id: new (require("mongodb").ObjectId)(userId) },
-            {
-              $set: {
-                planId: new (require("mongodb").ObjectId)(fallback),
-                stripeSubscriptionId: (session as any).subscription?.id || null,
-              },
-            }
-          );
-          console.log(
-            `Session finalize: Updated user ${userId} to PRO_PLAN_ID ${process.env.PRO_PLAN_ID}`
+            `Session finalize: Updated user ${userId} from plan ${currentPlanId} to plan ${targetPlanId}`
           );
         } else {
+          // Just update subscription ID without changing plan
+          await users.updateOne(
+            { _id: new (require("mongodb").ObjectId)(userId) },
+            {
+              $set: {
+                stripeSubscriptionId: (session as any).subscription?.id || null,
+              },
+            }
+          );
           console.log(
-            "Session finalize: No plan mapping found and no PRO_PLAN_ID configured"
+            `Session finalize: Updated subscription for user ${userId}, plan unchanged (${currentPlanId})`
           );
         }
       }

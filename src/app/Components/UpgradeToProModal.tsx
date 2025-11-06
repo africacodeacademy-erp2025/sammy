@@ -17,13 +17,18 @@ export default function UpgradeToProModal({
   const handleUpgrade = async () => {
     try {
       const token = localStorage.getItem("token");
+
+      console.log("Initiating upgrade to Pro (planId: 2)");
+
       const res = await fetch("/api/payments/stripe/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          planId: 2, // Pro Plan
+        }),
       });
       const data = await res.json();
       if (data?.url) {

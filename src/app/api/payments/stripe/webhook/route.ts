@@ -36,41 +36,39 @@ export async function POST(req: NextRequest) {
           const session = event.data.object as any;
           const metadata = session.metadata || {};
           const userId = metadata.userId;
-          const priceId = metadata.priceId;
+          const targetPlanId = metadata.planId ? Number(metadata.planId) : null;
+
           if (userId) {
             const db = await connectDB();
             const users = db.collection("users");
-            // Set user's planId based on the purchased priceId
-            // Recommendation: map priceId to actual planId in DB or set planId to priceId if that's your convention.
-            // Here we attempt to find a plan by priceId in 'plans' collection and set that plan._id on user.
-            const plans = db.collection("plans");
-            const planDoc = await plans.findOne({ priceId: priceId });
-            if (planDoc) {
+
+            // Get current user to check their existing planId
+            const currentUser = await users.findOne({
+              _id: new (require("mongodb").ObjectId)(userId),
+            });
+
+            const currentPlanId =
+              typeof currentUser?.planId === "number"
+                ? currentUser.planId
+                : null;
+
+            console.log(
+              `Webhook: User ${userId} current plan: ${currentPlanId}, target plan: ${targetPlanId}`
+            );
+
+            // ONLY update planId if it's different (actual upgrade/downgrade)
+            if (targetPlanId && targetPlanId !== currentPlanId) {
               await users.updateOne(
                 { _id: new (require("mongodb").ObjectId)(userId) },
-                { $set: { planId: planDoc._id } }
+                { $set: { planId: targetPlanId } } // Use numeric planId, NOT _id
               );
-              console.log(`Updated user ${userId} to plan ${planDoc._id}`);
+              console.log(
+                `Webhook: Updated user ${userId} from plan ${currentPlanId} to plan ${targetPlanId}`
+              );
             } else {
-              // Fallback: use PRO_PLAN_ID env var if present
-              const fallback = process.env.PRO_PLAN_ID;
-              if (fallback) {
-                await users.updateOne(
-                  { _id: new (require("mongodb").ObjectId)(userId) },
-                  {
-                    $set: {
-                      planId: new (require("mongodb").ObjectId)(fallback),
-                    },
-                  }
-                );
-                console.log(
-                  `Updated user ${userId} to PRO_PLAN_ID ${fallback}`
-                );
-              } else {
-                console.log(
-                  "No plan found for priceId and no PRO_PLAN_ID configured, skipping DB update"
-                );
-              }
+              console.log(
+                `Webhook: Payment processed for user ${userId}, plan unchanged (${currentPlanId})`
+              );
             }
           }
         } catch (innerErr) {
@@ -87,46 +85,30 @@ export async function POST(req: NextRequest) {
         console.log("💰 Payment success:", event.data.object.id);
         try {
           const invoice = event.data.object as any;
-          const metadata = invoice.metadata || {};
-          const userId = metadata.userId || invoice.customer_metadata?.userId;
-          const priceId = invoice.lines?.data?.[0]?.price?.id;
-          if (userId) {
+          const subscriptionId = invoice.subscription;
+
+          if (subscriptionId) {
             const db = await connectDB();
             const users = db.collection("users");
-            const plans = db.collection("plans");
-            const planDoc = await plans.findOne({ priceId: priceId });
-            if (planDoc) {
-              await users.updateOne(
-                { _id: new (require("mongodb").ObjectId)(userId) },
-                { $set: { planId: planDoc._id } }
+
+            // Find user by subscription ID - this is a renewal payment
+            const user = await users.findOne({
+              stripeSubscriptionId: subscriptionId,
+            });
+
+            if (user) {
+              console.log(
+                `Webhook: Renewal payment for user ${user._id}, plan unchanged (${user.planId})`
               );
-              console.log(`Updated user ${userId} to plan ${planDoc._id}`);
+              // Don't change planId on renewals - user stays on current plan
             } else {
-              const fallback = process.env.PRO_PLAN_ID;
-              if (fallback) {
-                await users.updateOne(
-                  { _id: new (require("mongodb").ObjectId)(userId) },
-                  {
-                    $set: {
-                      planId: new (require("mongodb").ObjectId)(fallback),
-                    },
-                  }
-                );
-                console.log(
-                  `Updated user ${userId} to PRO_PLAN_ID ${fallback}`
-                );
-              } else {
-                console.log(
-                  "No plan found for priceId on invoice and no PRO_PLAN_ID configured, skipping DB update"
-                );
-              }
+              console.log(
+                `Webhook: No user found for subscription ${subscriptionId}`
+              );
             }
           }
         } catch (innerErr) {
-          console.error(
-            "Error updating user plan from invoice webhook:",
-            innerErr
-          );
+          console.error("Error processing invoice payment webhook:", innerErr);
         }
         break;
       default:

@@ -61,7 +61,7 @@ export default function Login({ onSwitchToRegister }: LoginProps) {
   }
 
   return (
-    <div className="bg-gray-800/50 p-8 rounded-2xl shadow-lg border border-gray-700/50 w-full max-w-md lg:w-[460px] lg:h-[350px]">
+    <div className="mx-auto bg-gray-800/50 p-4 sm:p-6 lg:p-8 rounded-2xl shadow-2xl ring-1 ring-gray-800/50 w-full max-w-[95vw] sm:max-w-[520px] lg:max-w-[460px]">
       <h2 className="text-2xl font-bold text-white mb-6 text-center">
         Sign in
       </h2>
