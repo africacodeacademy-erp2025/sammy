@@ -651,201 +651,21 @@ export default function ChatBot() {
     updateMessageStatus(id, "rejected");
   };
 
-  const handleEditMessage = async (id: string, editedContent: string) => {
-    // Find the message being edited
-    const messageIndex = messages.findIndex((msg) => msg.id === id);
-    if (messageIndex === -1) return;
+  const handleEditMessage = (id: string, editedContent: string) => {
+    // Find and update the message in place - frontend only, no AI regeneration
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === id ? { ...msg, content: editedContent } : msg))
+    );
 
-    // Create updated message with edited content
-    const updatedMessages = messages
-      .slice(0, messageIndex + 1)
-      .map((msg) => (msg.id === id ? { ...msg, content: editedContent } : msg));
-
-    // Update state with only messages up to and including the edited one
-    setMessages(updatedMessages);
-
-    // Keep the existing threadId to update the same conversation history
-    const existingThreadId = currentThreadId;
-    console.log(`✏️ Editing message in thread: ${existingThreadId}`);
-
-    // Regenerate the post by sending the edited message to the agent
-    setLoading(true);
-    setIsTyping(true);
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const token = localStorage.getItem("token");
-
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          prompt: editedContent,
-          threadId: existingThreadId, // Pass existing threadId to maintain context
-        }),
+    // Save the updated conversation to history
+    if (currentThreadId) {
+      setMessages((currentMessages) => {
+        saveConversation(currentThreadId, currentMessages);
+        return currentMessages;
       });
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        const errorMsg = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          sender: "ai" as const,
-          content: data.error || `Server responded with ${res.status}`,
-          status: "error" as const,
-        };
-        setMessages((prev) => [...prev, errorMsg]);
-
-        if (existingThreadId) {
-          await saveConversation(existingThreadId, [
-            ...updatedMessages,
-            errorMsg,
-          ]);
-          console.log(`💾 Updated conversation: ${existingThreadId}`);
-        }
-        return;
-      }
-
-      // Handle the response same as sendMessage
-      if (data.greeting) {
-        const greetingMsg = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          sender: "ai" as const,
-          content: data.message,
-        };
-        setMessages((prev) => [...prev, greetingMsg]);
-
-        if (existingThreadId) {
-          await saveConversation(existingThreadId, [
-            ...updatedMessages,
-            greetingMsg,
-          ]);
-          console.log(`💾 Updated conversation: ${existingThreadId}`);
-        }
-      } else if (data.recurrence) {
-        const currentPlanName = userPlan?.name?.toLowerCase() || "";
-        if (currentPlanName.includes("basic")) {
-          setUpgradeModalOpen(true);
-          const upgradeMsg = {
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            sender: "ai" as const,
-            content:
-              "🎯 Recurring posts are a Pro feature! Upgrade to unlock automated posting schedules.",
-          };
-          setMessages((prev) => [...prev, upgradeMsg]);
-          // Don't save upgrade prompts to history
-        } else {
-          setRecurrenceData(data.recurrenceData);
-          setRecurrenceModalOpen(true);
-          const recurrenceMsg = {
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            sender: "ai" as const,
-            content: `I can set up a recurring ${data.recurrenceData.frequency} post for you. Please confirm the schedule details.`,
-          };
-          setMessages((prev) => [...prev, recurrenceMsg]);
-
-          if (existingThreadId) {
-            await saveConversation(existingThreadId, [
-              ...updatedMessages,
-              recurrenceMsg,
-            ]);
-            console.log(`💾 Updated conversation: ${existingThreadId}`);
-          }
-        }
-      } else if (data.scheduled) {
-        const scheduledMsg = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          sender: "ai" as const,
-          content: data.message,
-          status: "scheduled" as const,
-        };
-        setMessages((prev) => [...prev, scheduledMsg]);
-
-        if (existingThreadId) {
-          await saveConversation(existingThreadId, [
-            ...updatedMessages,
-            scheduledMsg,
-          ]);
-          console.log(`💾 Updated conversation: ${existingThreadId}`);
-        }
-      } else {
-        const draft = data.review?.post || data.post || "";
-        const platform = data.review?.platform || data.platform || "";
-        // Keep the existing threadId when editing to update the same conversation
-        const responseThreadId = data.review?.threadId || data.threadId;
-        const hasCredentials = data.review?.hasCredentials ?? true;
-
-        if (!hasCredentials) {
-          const warningMsg = {
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            sender: "ai" as const,
-            content: `${draft}\n\n🔗 Connect your ${platform} account in settings to post directly!`,
-            platform,
-          };
-          setMessages((prev) => [...prev, warningMsg]);
-
-          // Don't save connection warnings to history (they're transient)
-        } else {
-          const draftMsg = {
-            id: crypto.randomUUID(),
-            timestamp: Date.now(),
-            sender: "ai" as const,
-            content: draft,
-            status: "pending" as const,
-            threadId: existingThreadId || responseThreadId, // Use existing threadId to maintain conversation
-            platform,
-          };
-          setMessages((prev) => [...prev, draftMsg]);
-
-          // Always use the existing threadId to update the same conversation
-          const saveThreadId = existingThreadId || responseThreadId;
-          if (saveThreadId) {
-            // Only set currentThreadId if we don't have one yet (new conversation)
-            if (!existingThreadId && responseThreadId) {
-              setCurrentThreadId(responseThreadId);
-            }
-            await saveConversation(saveThreadId, [
-              ...updatedMessages,
-              draftMsg,
-            ]);
-            console.log(`💾 Updated conversation: ${saveThreadId}`);
-          }
-        }
-      }
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Sorry, I encountered an error processing your request.";
-      const errorMsg = {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        sender: "ai" as const,
-        content: message,
-        status: "error" as const,
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-
-      if (existingThreadId) {
-        await saveConversation(existingThreadId, [
-          ...updatedMessages,
-          errorMsg,
-        ]);
-        console.log(`💾 Updated conversation: ${existingThreadId}`);
-      }
-    } finally {
-      setLoading(false);
-      setIsTyping(false);
     }
+
+    console.log(`✏️ Message edited in place (ID: ${id})`);
   };
 
   const formatNextOccurrence = (timestamp: string) => {
