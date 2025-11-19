@@ -801,50 +801,167 @@ extractScheduleTime → [if scheduled] → END
 
 ## 🐳 Docker Deployment
 
-### Development with Docker
+SaMMy includes comprehensive Docker support for both development and production environments with automatic worker integration.
+
+### Development with Docker (Hot Reload)
+
+**Start the application:**
 
 ```bash
-# Build and run with hot reload
+# Build and run with hot reload enabled
 docker compose -f docker-compose.dev.yml up --build
 
-# Run worker inside container
-docker compose -f docker-compose.dev.yml exec sammy-app npx tsx workers/schedulePostWorker.ts
-````
-
-### Production with Docker
-
-```bash
-# Build and run production
-docker compose -f docker-compose.yml -f docker-compose.override.yml up -d --build
+# Run in detached mode
+docker compose -f docker-compose.dev.yml up -d --build
 
 # View logs
-docker compose -f docker-compose.yml -f docker-compose.override.yml logs -f
-
-# Stop services
-docker compose -f docker-compose.yml -f docker-compose.override.yml down
+docker compose -f docker-compose.dev.yml logs -f
 ```
 
-**Production Notes:**
+**Development Features:**
+- ✅ Hot reload enabled (changes reflected immediately)
+- ✅ Volume mounts for `src/`, `lib/`, `models/`, `workers/`, `public/`
+- ✅ `.env` file mounted as read-only
+- ✅ Next.js dev server with Turbopack
+- ✅ Container name: `sammy-app-dev`
+- ✅ Network: `sammy_dev_network`
 
-- Exposes port `3000:3000`
-- Reads environment from `.env` file
-- Next.js configured to bind to `0.0.0.0`
-- Multi-stage build for minimal image size
+**Run worker inside development container:**
 
-### Adding Redis Service (Optional)
-
-```yaml
-# Add to docker-compose.yml
-services:
-  redis:
-    image: redis/redis-stack-server:latest
-    ports:
-      - "6379:6379"
-    networks:
-      - sammy_network
+```bash
+docker compose -f docker-compose.dev.yml exec sammy-app npx tsx workers/schedulePostWorker.ts
 ```
 
-Then use: `REDIS_URL=redis://redis:6379`
+**Stop development environment:**
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
+### Production with Docker (Optimized Build)
+
+**Build and deploy:**
+
+```bash
+# Build and run production (uses multi-stage Dockerfile)
+docker compose -f docker-compose.yml up -d --build
+
+# View real-time logs
+docker compose -f docker-compose.yml logs -f
+
+# View logs for specific service
+docker compose -f docker-compose.yml logs -f sammy-app
+```
+
+**Production Features:**
+- ✅ Multi-stage build for minimal image size
+- ✅ Automatic worker startup via `docker-entrypoint.sh`
+- ✅ Both Next.js server and schedule worker run in single container
+- ✅ Non-root user (`nextjs`) for security
+- ✅ Health monitoring with structured logging
+- ✅ Auto-restart policy: `unless-stopped`
+- ✅ Container name: `sammy-app-prod`
+- ✅ Network: `sammy_production_network`
+
+**Production build process:**
+1. **Dependencies stage** - Installs production dependencies
+2. **Builder stage** - Builds Next.js with all environment variables
+3. **Runner stage** - Minimal runtime image with:
+   - Next.js standalone output
+   - Workers and application code
+   - Startup script that runs both server and worker
+
+**Startup script (`docker-entrypoint.sh`):**
+
+```bash
+#!/bin/sh
+# Starts schedule post worker in background
+# Starts Next.js server
+# Monitors both processes
+```
+
+**Stop production environment:**
+
+```bash
+docker compose -f docker-compose.yml down
+```
+
+**Restart production container:**
+
+```bash
+docker compose -f docker-compose.yml restart
+```
+
+### Environment Variables in Docker
+
+All environment variables are passed to Docker containers via:
+1. `.env` file (mounted/loaded)
+2. Build arguments (for production builds)
+
+**Required environment variables for production build:**
+- `JWT_SECRET`
+- `MONGO_URI`
+- `DATABASE_NAME`
+- `OPEN_AI_API`
+- `ENCRYPTION_KEY`
+- `STRIPE_SECRET_KEY`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_APP_URL`
+- `EMAIL_FROM`, `EMAIL_USER`, `EMAIL_PASS`
+- `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
+- `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET`, `TWITTER_BEARER_TOKEN`
+- `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`
+
+### Docker Architecture
+
+```
+📦 Development (Dockerfile.dev)
+├── Node.js 22 Alpine base
+├── Hot reload with volume mounts
+├── Port 3000 exposed
+└── Development dependencies included
+
+📦 Production (Dockerfile.prod)
+├── Stage 1: Dependencies (production only)
+├── Stage 2: Builder (builds Next.js)
+├── Stage 3: Runner (minimal runtime)
+│   ├── Next.js standalone server
+│   ├── Background worker
+│   ├── Application code (workers, lib, models)
+│   └── docker-entrypoint.sh (startup orchestration)
+└── Port 3000 exposed
+```
+
+### Troubleshooting Docker
+
+**Issue: Worker not running in production**
+- Check logs: `docker compose -f docker-compose.yml logs -f sammy-app`
+- Verify `docker-entrypoint.sh` has execute permissions
+- Ensure MongoDB connection is accessible from container
+
+**Issue: Hot reload not working in development**
+- Verify volume mounts in `docker-compose.dev.yml`
+- Check file permissions on host machine
+- Restart container: `docker compose -f docker-compose.dev.yml restart`
+
+**Issue: Build fails due to missing environment variables**
+- Ensure all required build args are in `.env` file
+- Check `docker-compose.yml` for correct ARG mappings
+- Verify `.env` file is in the same directory as `docker-compose.yml`
+
+**Issue: Container exits immediately**
+- Check logs: `docker compose logs sammy-app`
+- Verify Next.js build succeeded
+- Check MongoDB connection string
+
+### Docker Best Practices
+
+✅ **Always use `.env` file** - Never hardcode secrets
+✅ **Check logs regularly** - Monitor both server and worker
+✅ **Use named networks** - Improves container communication
+✅ **Implement health checks** - Add to docker-compose.yml for production
+✅ **Limit log size** - JSON file driver with rotation configured
+✅ **Run as non-root** - Security best practice (production uses `nextjs` user)
 
 ## ⚙️ Environment Variables
 
@@ -970,6 +1087,7 @@ SMTP_PASS=your_gmail_app_password
 ````
 
 #### `past_posts`
+
 ```typescript
 {
   _id: ObjectId,
@@ -983,6 +1101,7 @@ SMTP_PASS=your_gmail_app_password
 ```
 
 #### `messages` (Slack)
+
 ```typescript
 {
   _id: ObjectId,
@@ -999,6 +1118,7 @@ SMTP_PASS=your_gmail_app_password
 ## 📝 API Usage Examples
 
 ### 1. User Registration
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
@@ -1006,7 +1126,7 @@ curl -X POST http://localhost:3000/api/auth/signup \
     "email": "user@example.com",
     "password": "SecurePassword123"
   }'
-````
+```
 
 **Response:**
 

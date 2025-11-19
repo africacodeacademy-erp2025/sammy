@@ -651,21 +651,163 @@ export default function ChatBot() {
     updateMessageStatus(id, "rejected");
   };
 
-  const handleEditMessage = (id: string, editedContent: string) => {
-    // Find and update the message in place - frontend only, no AI regeneration
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === id ? { ...msg, content: editedContent } : msg))
-    );
+  const handleEditMessage = async (id: string, editedContent: string) => {
+    const messageToEdit = messages.find((msg) => msg.id === id);
+    if (!messageToEdit) return;
 
-    // Save the updated conversation to history
-    if (currentThreadId) {
-      setMessages((currentMessages) => {
-        saveConversation(currentThreadId, currentMessages);
-        return currentMessages;
-      });
+    // AI message editing: frontend-only update (no regeneration)
+    if (messageToEdit.sender === "ai") {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === id ? { ...msg, content: editedContent } : msg
+        )
+      );
+
+      // Save the updated conversation to history
+      if (currentThreadId) {
+        setMessages((currentMessages) => {
+          saveConversation(currentThreadId, currentMessages);
+          return currentMessages;
+        });
+      }
+
+      console.log(`✏️ AI message edited in place (ID: ${id})`);
+      return;
     }
 
-    console.log(`✏️ Message edited in place (ID: ${id})`);
+    // User message editing: update the message, clear all subsequent messages, and trigger AI regeneration
+    const editedMessageIndex = messages.findIndex((msg) => msg.id === id);
+
+    setMessages((prev) => {
+      // Keep only messages up to and including the edited message
+      const updatedMessages = prev.slice(0, editedMessageIndex + 1);
+      // Update the edited message content
+      return updatedMessages.map((msg) =>
+        msg.id === id ? { ...msg, content: editedContent } : msg
+      );
+    });
+
+    console.log(
+      `✏️ User message edited, clearing subsequent messages and regenerating AI response (ID: ${id})`
+    );
+    setLoading(true);
+    setIsTyping(true);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          prompt: editedContent,
+          threadId: currentThreadId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        addMessage({
+          sender: "ai",
+          content: data.error || `Server responded with ${res.status}`,
+          status: "error",
+        });
+        return;
+      }
+
+      // Handle different response types (same as sendMessage)
+      if (data.greeting) {
+        addMessage({
+          sender: "ai",
+          content: data.message,
+        });
+      } else if (data.recurrence) {
+        const currentPlanName = userPlan?.name?.toLowerCase() || "";
+        if (currentPlanName.includes("basic")) {
+          setUpgradeModalOpen(true);
+          addMessage({
+            sender: "ai",
+            content: `🔒 Recurring schedules are available on Pro and Business plans. Please upgrade to use this feature.`,
+            platform: data.recurrenceData?.platform,
+            status: "warning" as const,
+          } as any);
+        } else {
+          setRecurrenceData(data.recurrenceData);
+          setRecurrenceModalOpen(true);
+          addMessage({
+            sender: "ai",
+            content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
+            platform: data.recurrenceData?.platform,
+          });
+        }
+      } else if (data.scheduled) {
+        addMessage({
+          sender: "ai",
+          content: data.message,
+          status: "scheduled" as const,
+          platform: data.platform,
+        });
+      } else {
+        if (data.review?.hasCredentials === false) {
+          const platformName =
+            data.review?.platform === "twitter"
+              ? "Twitter"
+              : data.review?.platform === "facebook"
+              ? "Facebook"
+              : data.review?.platform === "linkedin"
+              ? "LinkedIn"
+              : data.review?.platform;
+
+          addMessage({
+            sender: "ai",
+            content: data.review?.post || data.message,
+            platform: data.review?.platform,
+          });
+
+          addMessage({
+            sender: "ai",
+            content: `🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
+            platform: data.review?.platform,
+            status: "warning" as const,
+          } as any);
+        } else {
+          addMessage({
+            sender: "ai",
+            content: data.review?.post || data.message,
+            status: "pending" as const,
+            threadId: data.review?.threadId,
+            platform: data.review?.platform,
+          });
+        }
+      }
+
+      // Auto-save conversation
+      if (currentThreadId) {
+        setTimeout(() => {
+          setMessages((currentMessages) => {
+            saveConversation(currentThreadId, currentMessages);
+            return currentMessages;
+          });
+        }, 100);
+      }
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Sorry, I encountered an error processing your request.";
+      addMessage({
+        sender: "ai",
+        content: message,
+        status: "error" as const,
+      });
+    } finally {
+      setLoading(false);
+      setIsTyping(false);
+    }
   };
 
   const formatNextOccurrence = (timestamp: string) => {

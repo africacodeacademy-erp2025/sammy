@@ -143,7 +143,7 @@ export default function MessageBubble({
             <textarea
               value={editedContent}
               onChange={(e) => setEditedContent(e.target.value)}
-              className="w-full p-2 bg-gray-800/50 text-white rounded border border-gray-700 text-sm"
+              className="w-full p-2 bg-gray-800/50 text-white rounded border-none outline-none text-sm focus:ring-0"
               rows={4}
             />
             <div className="flex gap-2 justify-end">

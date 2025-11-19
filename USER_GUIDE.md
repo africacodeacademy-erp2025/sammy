@@ -703,8 +703,7 @@ Have an idea for a new feature?
 ## 🎯 Getting Started Checklist
 
 ### **New User Setup**
-- [ ] Create account and verify email
-- [ ] Complete profile information
+- [ ] Create account
 - [ ] Connect at least one social media platform
 - [ ] Generate your first AI content
 - [ ] Schedule your first post
@@ -713,7 +712,8 @@ Have an idea for a new feature?
 ### **Platform Connections**
 - [ ] Facebook: Connect Page with admin access
 - [ ] Twitter: Authorize account for posting
-- [ ] Slack: Connect workspace and select channels
+- [ ] LinkedIn: Connect LinkedIn account for posting
+- [ ] Slack: Connect workspace and select channels for business account
 
 ### **Content Creation**
 - [ ] Try different prompt styles
@@ -732,7 +732,6 @@ Have an idea for a new feature?
 ## 📈 Future Updates & Roadmap
 
 ### **Upcoming Features**
-- **LinkedIn Integration:** Professional network posting
 - **Instagram Support:** Visual content management
 - **Advanced Analytics:** Detailed performance metrics
 - **Content Calendar:** Visual scheduling interface
