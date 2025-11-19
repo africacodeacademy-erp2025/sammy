@@ -10,7 +10,7 @@
 
 - **[Poloko Nkolanyane]** - Technical Lead
 - **[Pusetso Borantisi]** - Project Manager
-- **[Amantle Nthubu]** - Developer
+
 
 **Our Strength:** Technical excellence + Deep understanding of African market needs
 
@@ -54,12 +54,12 @@
 
 **AI-powered social media management:**
 
-✅ Generates content matching YOUR voice  
-✅ Learns from past posts (vector search)  
-✅ Natural language scheduling ("tomorrow at 9am")  
-✅ Recurring automation (daily/weekly/monthly)  
-✅ Multi-platform (Twitter, Facebook, LinkedIn)  
-✅ One-click OAuth - zero setup  
+✅ Generates content matching YOUR voice
+✅ Learns from past posts (vector search)
+✅ Natural language scheduling ("tomorrow at 9am")
+✅ Recurring automation (daily/weekly/monthly)
+✅ Multi-platform (Twitter, Facebook, LinkedIn)
+✅ One-click OAuth - zero setup
 ✅ Enterprise security (AES-256-GCM)
 
 **Live:** [sammy.africacodefoundry.com](https://sammy.africacodefoundry.com)
@@ -159,14 +159,14 @@
 ## � Why SaMMy Wins
 
 **Traction:**
-✅ Live production app  
-✅ Real OAuth integrations  
-✅ Proven AI technology (OpenAI + MongoDB vector search)  
+✅ Live production app
+✅ Real OAuth integrations
+✅ Proven AI technology (OpenAI + MongoDB vector search)
 ✅ Scalable Docker architecture
 
 **Team:**
-✅ Top 1% Africa Code Academy graduates  
-✅ Full-stack capabilities  
+✅ Top 1% Africa Code Academy graduates
+✅ Full-stack capabilities
 ✅ African market expertise
 
 **Tech Stack:**
