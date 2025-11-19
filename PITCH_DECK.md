@@ -10,6 +10,7 @@
 
 - **[Poloko Nkolanyane]** - Technical Lead
 - **[Pusetso Borantisi]** - Project Manager
+- **[Amatle Nthubu]** - Developer
 
 
 **Our Strength:** Technical excellence + Deep understanding of African market needs
