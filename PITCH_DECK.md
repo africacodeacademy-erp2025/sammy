@@ -12,7 +12,6 @@
 - **[Pusetso Borantisi]** - Project Manager
 - **[Amatle Nthubu]** - Developer
 
-
 **Our Strength:** Technical excellence + Deep understanding of African market needs
 
 ---
@@ -36,16 +35,16 @@
 
 ## � The Problem
 
-**Businesses struggle with social media:**
-
 - 📊 Struggle to maintain consistent presence, therefore missed oppotunities
 - ⏰ More time spent on content generation and management across different platforms
-- 💰 Businesses spend a lot of social media managers
+- 💰 Businesses spend a lot on social media managers
 - 🌍 Africa's lack affordable solutions
 
 **Current tools fail:**
 
-- Hootsuite/Buffer:
+### Hootsuite/Buffer:
+
+- Pro plans too expensive
 - No AI that learns your voice
 - Manual work still required
 
