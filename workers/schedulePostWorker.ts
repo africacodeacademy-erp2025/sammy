@@ -79,16 +79,93 @@ async function initializeAgenda() {
             // Generate post content at scheduled time (normal path)
             console.log(`📝 Generating content for scheduled post: ${postId}`);
 
+            // Handle both platforms array and legacy platform string
+            let platforms =
+              scheduledPost.platforms ||
+              (scheduledPost.platform ? [scheduledPost.platform] : []);
+
+            // If no platforms specified, fetch user's connected platforms from database
+            if (platforms.length === 0) {
+              console.log(
+                `📱 No platforms in scheduled post, fetching user's connected platforms...`
+              );
+              const { ObjectId: MongoObjectId } = await import("mongodb");
+              const userDoc = await db.collection("users").findOne({
+                _id: new MongoObjectId(scheduledPost.userId),
+              });
+
+              if (userDoc) {
+                // Helper to check if a string value is valid (not null, undefined, or empty)
+                const isValidToken = (token: unknown): boolean => {
+                  return typeof token === "string" && token.length > 0;
+                };
+
+                // Twitter: check for valid accessToken
+                if (isValidToken(userDoc?.twitter?.accessToken)) {
+                  platforms.push("twitter");
+                }
+
+                // Facebook: check for valid accessToken AND pageId (both required for posting)
+                if (
+                  isValidToken(userDoc?.facebook?.accessToken) &&
+                  isValidToken(userDoc?.facebook?.pageId)
+                ) {
+                  platforms.push("facebook");
+                }
+
+                // LinkedIn: check for valid accessToken
+                if (isValidToken(userDoc?.linkedin?.accessToken)) {
+                  platforms.push("linkedin");
+                }
+
+                console.log(
+                  `📱 Found connected platforms for user: ${
+                    platforms.join(", ") || "none"
+                  }`
+                );
+              }
+            }
+
+            // Import createThread for generating threadId
+            const { createThread } = await import("../lib/openaiThreads");
+
+            // Create a new thread for this scheduled post
+            let threadId: string | null = null;
+            try {
+              threadId = await createThread();
+              console.log(`🆕 Created thread for scheduled post: ${threadId}`);
+            } catch (threadErr) {
+              console.warn(
+                "Could not create thread, continuing without:",
+                threadErr
+              );
+            }
+
             const state: GraphState = {
               prompt: scheduledPost.prompt,
-              platform: scheduledPost.platform,
               userId: scheduledPost.userId,
+              threadId: threadId || undefined,
             };
+
+            console.log(`📤 Calling generatePost with state:`, {
+              prompt: state.prompt?.substring(0, 50) + "...",
+              userId: state.userId,
+              threadId: state.threadId,
+            });
 
             const result = await generatePost(state);
 
-            if (!result.post || !result.threadId) {
-              throw new Error("Failed to generate post content");
+            console.log(`📥 generatePost result:`, {
+              success: result.success,
+              hasPost: !!result.post,
+              postLength: result.post?.length,
+              error: result.error,
+            });
+
+            if (!result.post) {
+              throw new Error(
+                result.error || "Failed to generate post content"
+              );
             }
 
             // Update with generated content and mark as ready for review
@@ -97,8 +174,8 @@ async function initializeAgenda() {
               {
                 $set: {
                   post: result.post,
-                  threadId: result.threadId,
-                  platform: state.platform,
+                  threadId: threadId, // Use the thread we created
+                  platforms, // Store as array
                   status: "ready_for_review",
                   isScheduled: true,
                   processedAt: new Date(),
@@ -107,7 +184,11 @@ async function initializeAgenda() {
               }
             );
 
-            console.log(`✅ Post ${postId} generated and ready for review`);
+            console.log(
+              `✅ Post ${postId} generated and ready for review on platforms: ${platforms.join(
+                ", "
+              )}`
+            );
           } catch (err: any) {
             console.error(`❌ Failed to process post ${postId}:`, err.message);
 
@@ -186,15 +267,20 @@ agenda.on("success", async (job) => {
 
 // Auto-cleanup: Remove failed jobs after max retries
 agenda.on("fail", async (job, err) => {
-  console.error(`❌ Job ${job.attrs.name} failed:`, err.message);
+  // Add null checks to prevent crashes
+  const jobName = job?.attrs?.name || "unknown";
+  const errMessage = err?.message || "Unknown error";
+  console.error(`❌ Job ${jobName} failed:`, errMessage);
 
   // Remove after 3 failed attempts to avoid accumulation
-  const failCount = job.attrs.failCount || 0;
-  if (failCount >= 3) {
-    console.log(
-      `🗑️ Removing job ${job.attrs.name} after ${failCount} failures`
-    );
-    await job.remove();
+  const failCount = job?.attrs?.failCount || 0;
+  if (failCount >= 3 && job) {
+    console.log(`🗑️ Removing job ${jobName} after ${failCount} failures`);
+    try {
+      await job.remove();
+    } catch (removeErr) {
+      console.error("Failed to remove job:", removeErr);
+    }
   }
 });
 
@@ -312,8 +398,13 @@ async function processRecurringPosts() {
       const timeDiff = nextOccTime.getTime() - now.getTime();
       const minutesUntil = Math.round(timeDiff / 1000 / 60);
 
+      // Handle both platforms array and legacy platform string
+      const platformsDisplay = post.platforms
+        ? post.platforms.join(", ")
+        : post.platform || "unknown";
+
       console.log(
-        `  - Post ${post._id}: nextOccurrence=${post.nextOccurrence}, platform=${post.platform}, ` +
+        `  - Post ${post._id}: nextOccurrence=${post.nextOccurrence}, platforms=${platformsDisplay}, ` +
           `due=${isPast ? "YES ✅" : "NO"} (${
             isPast
               ? Math.abs(minutesUntil) + "min ago"
@@ -348,10 +439,46 @@ async function processRecurringPosts() {
         );
 
         // Create a new scheduled post document
+        // Handle both platforms array and legacy platform string
+        let platforms =
+          recurringPost.platforms ||
+          (recurringPost.platform ? [recurringPost.platform] : []);
+
+        // If no platforms specified in the recurring post, get user's connected platforms
+        if (platforms.length === 0) {
+          const { ObjectId: ObjId } = require("mongodb");
+          const userDoc = await db.collection("users").findOne({
+            _id: new ObjId(recurringPost.userId),
+          });
+
+          if (userDoc) {
+            const isValidToken = (token: unknown): boolean => {
+              return typeof token === "string" && token.length > 0;
+            };
+
+            if (isValidToken(userDoc?.twitter?.accessToken))
+              platforms.push("twitter");
+            if (
+              isValidToken(userDoc?.facebook?.accessToken) &&
+              isValidToken(userDoc?.facebook?.pageId)
+            ) {
+              platforms.push("facebook");
+            }
+            if (isValidToken(userDoc?.linkedin?.accessToken))
+              platforms.push("linkedin");
+
+            console.log(
+              `📊 Detected platforms from user credentials: ${
+                platforms.join(", ") || "none"
+              }`
+            );
+          }
+        }
+
         const newScheduledPost = {
           userId: recurringPost.userId,
           prompt: recurringPost.prompt,
-          platform: recurringPost.platform,
+          platforms, // Store as array
           scheduleTime: nextOccurrenceValue, // Use ISO string for consistency
           status: "scheduled",
           isScheduled: true,
@@ -474,24 +601,86 @@ async function processMissedScheduledPosts() {
       try {
         console.log(`⚡ Processing missed post: ${post._id.toString()}`);
 
+        // Handle both platforms array and legacy platform string
+        let platforms =
+          post.platforms || (post.platform ? [post.platform] : []);
+
+        // If no platforms specified, fetch user's connected platforms from database
+        if (platforms.length === 0) {
+          console.log(
+            `📱 No platforms in missed post, fetching user's connected platforms...`
+          );
+          const { ObjectId: MongoObjectId } = await import("mongodb");
+          const userDoc = await db.collection("users").findOne({
+            _id: new MongoObjectId(post.userId),
+          });
+
+          if (userDoc) {
+            // Helper to check if a string value is valid (not null, undefined, or empty)
+            const isValidToken = (token: unknown): boolean => {
+              return typeof token === "string" && token.length > 0;
+            };
+
+            // Twitter: check for valid accessToken
+            if (isValidToken(userDoc?.twitter?.accessToken)) {
+              platforms.push("twitter");
+            }
+
+            // Facebook: check for valid accessToken AND pageId (both required for posting)
+            if (
+              isValidToken(userDoc?.facebook?.accessToken) &&
+              isValidToken(userDoc?.facebook?.pageId)
+            ) {
+              platforms.push("facebook");
+            }
+
+            // LinkedIn: check for valid accessToken
+            if (isValidToken(userDoc?.linkedin?.accessToken)) {
+              platforms.push("linkedin");
+            }
+
+            console.log(
+              `📱 Found connected platforms for user: ${
+                platforms.join(", ") || "none"
+              }`
+            );
+          }
+        }
+
+        // Import createThread for generating threadId
+        const { createThread } = await import("../lib/openaiThreads");
+
+        // Create a new thread for this post
+        let threadId: string | null = null;
+        try {
+          threadId = await createThread();
+          console.log(`🆕 Created thread for missed post: ${threadId}`);
+        } catch (threadErr) {
+          console.warn(
+            "Could not create thread, continuing without:",
+            threadErr
+          );
+        }
+
         // Create state for post generation
         const state: GraphState = {
           prompt: post.prompt,
-          platform: post.platform,
           userId: post.userId,
+          threadId: threadId || undefined,
         };
 
         // Generate the post content
         const result = await generatePost(state);
 
-        if (result.success && result.post && result.threadId) {
+        if (result.success && result.post) {
           // Update the post with generated content
           await scheduledPosts.updateOne(
             { _id: post._id },
             {
               $set: {
                 post: result.post,
-                threadId: result.threadId,
+                threadId: threadId, // Use the thread we created
+                platforms, // Store as array
                 status: "ready_for_review",
                 processedAt: new Date(),
                 updatedAt: new Date(),

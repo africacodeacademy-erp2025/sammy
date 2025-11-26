@@ -7,7 +7,8 @@ type ScheduledPost = {
   _id: ObjectId;
   userId: string;
   prompt: string;
-  platform: string;
+  platform?: string; // Legacy single platform
+  platforms?: string[]; // New multi-platform array
   scheduleTime: string;
   status: "scheduled" | "ready_for_review" | string;
   post?: string;
@@ -125,6 +126,149 @@ export async function DELETE(req: NextRequest) {
     console.error("Error deleting scheduled post:", error);
     return NextResponse.json(
       { error: "Failed to delete scheduled post" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PUT - Update a scheduled post (prompt and/or scheduleTime)
+ */
+export async function PUT(req: NextRequest) {
+  try {
+    const user = await getUserFromRequest(req.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { id, prompt, scheduleTime } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Scheduled post ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // At least one field must be provided
+    if (!prompt && !scheduleTime) {
+      return NextResponse.json(
+        { error: "At least one field (prompt or scheduleTime) is required" },
+        { status: 400 }
+      );
+    }
+
+    const db = await connectDB();
+    const scheduledPosts = db.collection<ScheduledPost>("scheduledPosts");
+
+    // Verify ownership and get current post
+    const existingPost = await scheduledPosts.findOne({
+      _id: new ObjectId(id),
+      userId: user._id.toString(),
+    });
+
+    if (!existingPost) {
+      return NextResponse.json(
+        { error: "Scheduled post not found" },
+        { status: 404 }
+      );
+    }
+
+    // Only allow editing posts that are still "scheduled" (not yet processed)
+    if (existingPost.status !== "scheduled") {
+      return NextResponse.json(
+        { error: "Cannot edit a post that has already been processed" },
+        { status: 400 }
+      );
+    }
+
+    // Build update object
+    const updateFields: Partial<ScheduledPost> = {
+      updatedAt: new Date(),
+    };
+
+    if (prompt) {
+      updateFields.prompt = prompt;
+    }
+
+    // If scheduleTime is changing, we need to reschedule the Agenda job
+    let newJobId: string | undefined;
+    if (scheduleTime) {
+      // Validate the new schedule time is in the future
+      const newScheduleDate = new Date(scheduleTime);
+      if (newScheduleDate <= new Date()) {
+        return NextResponse.json(
+          { error: "Schedule time must be in the future" },
+          { status: 400 }
+        );
+      }
+
+      updateFields.scheduleTime = scheduleTime;
+
+      // Cancel the old job if it exists
+      if (existingPost.jobId) {
+        try {
+          const { cancelScheduledPost } = await import(
+            "../../../../workers/schedulePostWorker"
+          );
+          await cancelScheduledPost(existingPost.jobId);
+          console.log(`✅ Cancelled old Agenda job ${existingPost.jobId}`);
+        } catch (err) {
+          console.error("Failed to cancel old Agenda job:", err);
+        }
+      }
+
+      // Schedule a new job with the new time
+      try {
+        const { schedulePost } = await import(
+          "../../../../workers/schedulePostWorker"
+        );
+        newJobId = await schedulePost(id, newScheduleDate);
+        updateFields.jobId = newJobId;
+        console.log(
+          `📅 Rescheduled post ${id} for ${scheduleTime}, new job: ${newJobId}`
+        );
+      } catch (err) {
+        console.error("Failed to reschedule post:", err);
+        return NextResponse.json(
+          { error: "Failed to reschedule the post" },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Update the document
+    await scheduledPosts.updateOne(
+      { _id: new ObjectId(id), userId: user._id.toString() },
+      { $set: updateFields }
+    );
+
+    // Format response message
+    const localTimeString = scheduleTime
+      ? new Date(scheduleTime).toLocaleString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })
+      : null;
+
+    return NextResponse.json({
+      success: true,
+      message: scheduleTime
+        ? `Post updated and rescheduled for ${localTimeString}`
+        : "Post updated successfully",
+      scheduleTime: scheduleTime || existingPost.scheduleTime,
+      jobId: newJobId || existingPost.jobId,
+    });
+  } catch (error) {
+    console.error("Error updating scheduled post:", error);
+    return NextResponse.json(
+      { error: "Failed to update scheduled post" },
       { status: 500 }
     );
   }

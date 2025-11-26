@@ -2,39 +2,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import OpenAI from "openai";
-import { twitterPosting } from "../../../../lib/platforms/twitterPosting";
-import { facebookPosting } from "../../../../lib/platforms/facebookPosting";
-import { linkedinPosting } from "../../../../lib/platforms/linkedinPosting";
 import { connectDB } from "../../../../lib/mongo";
 import { getUserFromRequest } from "../../../../lib/auth";
 import { decrypt } from "../../../../lib/crypto";
 import { ObjectId } from "mongodb";
-import {
-  buildSmartContext,
-  shouldUseRAG,
-} from "../../../../lib/contextManager";
 import { getModelConfig } from "../../../../lib/modelConfig";
 import {
   detectGreeting,
   handleGreeting,
 } from "../../../../lib/greetingHandler";
 import {
-  sanitizeForTwitter,
-  sanitizeForFacebook,
-  sanitizeForPlatform,
-  validateContent,
-  getPlatformSpecificGuidelines,
-} from "../../../../lib/contentSanitizer";
+  createThread,
+  addMessageToThread,
+  getThreadMessages,
+} from "../../../../lib/openaiThreads";
+import {
+  distributeToMultiplePlatforms,
+  validatePlatforms,
+  AVAILABLE_PLATFORMS,
+} from "../../../../lib/platformDistributor";
 
 const openai = new OpenAI({ apiKey: process.env.OPEN_AI_API });
 
-function generateThreadId() {
-  return Math.random().toString(36).substring(2, 12);
-}
-
 export interface GraphState {
   prompt: string;
-  platform: string;
   post?: string;
   threadId?: string;
   result?: any;
@@ -42,6 +33,12 @@ export interface GraphState {
   success?: boolean;
   error?: string;
   userId?: string;
+  availablePlatforms?: string[];
+  isGreeting?: boolean;
+  model?: string;
+  maxTokens?: number;
+  // For PUT endpoint only
+  platforms?: string[];
   tokens?: {
     twitter?: {
       accessToken: string;
@@ -56,72 +53,10 @@ export interface GraphState {
     };
   };
   authToken?: string;
-  isRandomPost?: boolean;
-  isGreeting?: boolean;
   attachments?: File[];
-  model?: string;
-  maxTokens?: number;
 }
 
-function detectPlatform(
-  prompt: string,
-  platform?: string
-): { platform: string | null; error?: string } {
-  const normalized = (platform || prompt || "").toLowerCase();
-
-  if (normalized.includes("twitter") || normalized.includes("x"))
-    return { platform: "twitter" };
-  if (normalized.includes("facebook")) return { platform: "facebook" };
-  if (normalized.includes("linkedin")) return { platform: "linkedin" };
-
-  // Check for unsupported platforms
-  const unsupportedPlatforms = [
-    "instagram",
-    "tiktok",
-    "youtube",
-    "snapchat",
-    "pinterest",
-  ];
-  const detectedUnsupported = unsupportedPlatforms.find((p) =>
-    normalized.includes(p)
-  );
-
-  if (detectedUnsupported) {
-    return {
-      platform: null,
-      error: `I'd love to help with ${
-        detectedUnsupported.charAt(0).toUpperCase() +
-        detectedUnsupported.slice(1)
-      } posts, but I currently only support Twitter, Facebook, and LinkedIn. Try asking me to create a post for one of these platforms instead! 🚀`,
-    };
-  }
-
-  // No platform detected
-  return {
-    platform: null,
-    error:
-      "I couldn't detect which platform you'd like to post to. Please mention 'Twitter', 'Facebook', or 'LinkedIn' in your request. For example: 'Create a LinkedIn post about...' 📱",
-  };
-}
-
-/**
- * Heuristic to determine if the prompt contains a topic beyond just mentioning the platform.
- * Returns true if there appears to be a substantive topic in the prompt.
- */
-function hasTopic(prompt: string, platform: string): boolean {
-  if (!prompt) return false;
-  const normalized = prompt.toLowerCase();
-  // Remove the platform token and common verbs/stopwords that indicate an instruction only
-  let cleaned = normalized.replace(new RegExp(`\\b${platform}\\b`, "gi"), "");
-  cleaned = cleaned.replace(
-    /\b(post|create|write|tweet|compose|publish|please|for|me|about|on|to|a|the|in)\b/gi,
-    ""
-  );
-  // Remove punctuation and extra whitespace
-  cleaned = cleaned.replace(/[^\w\s]/g, "").trim();
-  // Consider it a topic if we have more than a couple characters (word length > 2)
-  return cleaned.length > 2;
-}
+// Platform detection removed - users select platforms via UI after post generation
 
 function isValidISODate(dateString: string): boolean {
   const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -220,7 +155,7 @@ async function checkGreeting(state: GraphState): Promise<Partial<GraphState>> {
   const { prompt } = state;
 
   if (detectGreeting(prompt)) {
-    const result = handleGreeting({ prompt, platform: state.platform });
+    const result = handleGreeting({ prompt, platform: "" });
     return {
       post: result.post,
       success: result.success,
@@ -236,7 +171,6 @@ async function extractRecurrenceTime(
 ): Promise<Partial<GraphState>> {
   const { prompt } = state;
   const now = new Date().toISOString();
-  const currentDate = new Date();
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const completion = await openai.chat.completions.create({
@@ -276,7 +210,6 @@ Rules:
     if (parsed.time && parsed.timestamp && isValidISODate(parsed.timestamp)) {
       return {
         scheduleTime: parsed.timestamp,
-        // Store the time separately for the recurrence modal
         ...state,
         result: {
           ...state.result,
@@ -359,7 +292,7 @@ Be intelligent about context clues and implicit time references.`,
 export async function generatePost(
   state: GraphState
 ): Promise<Partial<GraphState>> {
-  const { prompt, userId, platform, model, maxTokens } = state;
+  const { prompt, userId, model, maxTokens } = state;
 
   if (!userId) {
     console.error("Error: userId is missing from graph state.");
@@ -370,149 +303,145 @@ export async function generatePost(
     };
   }
 
-  // Use model and maxTokens from state, with fallbacks to default (Pro plan values)
+  // Use model and maxTokens from state, with fallbacks
   const selectedModel = model || "gpt-4o-mini";
   const selectedMaxTokens = maxTokens || 250;
 
   console.log(
-    `🤖 Using model: ${selectedModel} with max tokens: ${selectedMaxTokens}`
+    `🤖 Generating platform-agnostic post | Model: ${selectedModel} | Max tokens: ${selectedMaxTokens}`
   );
 
-  const db = await connectDB();
-  const queryEmbedding = await getEmbedding(prompt);
+  let db;
+  let queryEmbedding;
 
-  // --- NEW: Load conversation history if threadId exists ---
-  let conversationContext: Array<{
-    role: "user" | "assistant";
+  try {
+    db = await connectDB();
+  } catch (dbErr) {
+    console.error("Failed to connect to database:", dbErr);
+    return {
+      success: false,
+      error: "Database connection failed. Please try again.",
+    };
+  }
+
+  try {
+    queryEmbedding = await getEmbedding(prompt);
+  } catch (embErr) {
+    console.error("Failed to generate embedding:", embErr);
+    // Continue without embedding - we'll skip vector search
+    queryEmbedding = null;
+  }
+
+  // --- Load conversation history from OpenAI Threads if threadId exists ---
+  let conversationMessages: Array<{
+    role: "system" | "user" | "assistant";
     content: string;
   }> = [];
 
   if (state.threadId) {
     try {
-      const conversation = await db.collection("chatHistory").findOne({
-        userId,
-        threadId: state.threadId,
-      });
+      const threadMessages = await getThreadMessages(state.threadId, 10);
 
-      if (conversation && conversation.messages) {
-        // Build smart context using hybrid approach
-        const useRAG = shouldUseRAG(conversation.messages);
-        conversationContext = await buildSmartContext(
-          conversation.messages,
-          prompt,
-          {
-            maxRecentMessages: 6, // Last 3 exchanges
-            maxTotalTokens: 2000,
-            useRAG,
-            ragTopK: 2,
-          }
-        );
+      conversationMessages = threadMessages.map((msg) => ({
+        role: msg.role === "user" ? "user" : "assistant",
+        content: msg.content,
+      })) as Array<{ role: "system" | "user" | "assistant"; content: string }>;
 
-        console.log(
-          `📚 Loaded ${conversationContext.length} context messages (RAG: ${useRAG})`
-        );
-      }
+      console.log(
+        `📜 Loaded ${conversationMessages.length} messages from OpenAI thread ${state.threadId}`
+      );
     } catch (err) {
-      console.error("Error loading conversation context:", err);
-      // Continue without context if loading fails
+      console.error("Error loading OpenAI thread messages:", err);
+      // If thread doesn't exist, continue without context
     }
   }
 
-  // Additionally, include the raw recent conversation messages (user/assistant)
-  // to ensure the LLM sees the most recent dialog and understands user edits,
-  // clarifications, and follow-ups. This complements the RAG/smart context above.
-  let recentConversationMessages: Array<{
-    role: "system" | "user" | "assistant";
-    content: string;
-  }> = [];
   try {
-    if (state.threadId) {
-      const conv = await db.collection("chatHistory").findOne({
-        userId,
-        threadId: state.threadId,
-      });
-      if (conv && Array.isArray(conv.messages) && conv.messages.length > 0) {
-        // Take the last N raw exchanges (default 10) and map to LLM roles
-        const N = 10;
-        const raw = conv.messages.slice(-N);
-        recentConversationMessages = raw
-          .filter((m: any) => m && m.content)
-          .map((m: any) => ({
-            role: m.sender === "ai" ? "assistant" : "user",
-            content: String(m.content),
-          }));
+    // --- Retrieve context from Slack messages (RAG) ---
+    let relevantContext = "";
+    let relevantStyle = "";
+
+    // Only do vector search if we have an embedding
+    if (queryEmbedding) {
+      try {
+        const contextResults = await db
+          .collection("messages")
+          .aggregate([
+            {
+              $vectorSearch: {
+                index: "vector_index",
+                path: "embedding",
+                queryVector: queryEmbedding,
+                numCandidates: 100,
+                limit: 3,
+                filter: { userId: { $eq: userId } },
+              },
+            },
+            {
+              $project: {
+                text: 1,
+                channel: 1,
+                ts: 1,
+                score: { $meta: "vectorSearchScore" },
+              },
+            },
+          ])
+          .toArray();
+
+        const RELEVANCE_THRESHOLD = 0.65;
+        relevantContext = contextResults
+          .filter((d: any) => d.score >= RELEVANCE_THRESHOLD)
+          .map((d: any) => `- ${d.text}`)
+          .join("\n");
+      } catch (vectorErr) {
+        console.warn(
+          "Vector search for messages failed, continuing without context:",
+          vectorErr
+        );
       }
-    }
-  } catch (err) {
-    // Non-fatal: log and continue
-    console.error("Error loading recent conversation messages:", err);
-  }
 
-  try {
-    // --- 1. Retrieve context from Slack messages (RAG) ---
-    const contextResults = await db
-      .collection("messages")
-      .aggregate([
-        {
-          $vectorSearch: {
-            index: "vector_index",
-            path: "embedding",
-            queryVector: queryEmbedding,
-            numCandidates: 100,
-            limit: 3,
-            filter: { userId: { $eq: userId } },
-          },
-        },
-        {
-          $project: {
-            text: 1,
-            channel: 1,
-            ts: 1,
-            score: { $meta: "vectorSearchScore" },
-          },
-        },
-      ])
-      .toArray();
+      // --- Retrieve posting style examples from past_posts (platform-agnostic) ---
+      try {
+        const styleResults = await db
+          .collection("past_posts")
+          .aggregate([
+            {
+              $vectorSearch: {
+                index: "vector_index",
+                path: "embedding",
+                queryVector: queryEmbedding,
+                numCandidates: 100,
+                limit: 5, // Get more examples since we're not filtering by platform
+                filter: { userId: { $eq: userId } },
+              },
+            },
+            {
+              $project: {
+                message: 1,
+                platform: 1,
+                postId: 1,
+                score: { $meta: "vectorSearchScore" },
+              },
+            },
+          ])
+          .toArray();
 
-    const RELEVANCE_THRESHOLD = 0.65;
-    const relevantContext = contextResults
-      .filter((d) => d.score >= RELEVANCE_THRESHOLD)
-      .map((d) => `- ${d.text}`)
-      .join("\n");
+        const RELEVANCE_THRESHOLD_STYLE = 0.65;
+        relevantStyle = styleResults
+          .filter((d: any) => d.score >= RELEVANCE_THRESHOLD_STYLE)
+          .map((d: any) => `- [${d.platform}] ${d.message}`)
+          .join("\n");
+      } catch (styleErr) {
+        console.warn(
+          "Vector search for past_posts failed, continuing without style:",
+          styleErr
+        );
+      }
+    } // End of if (queryEmbedding)
 
-    // --- 2. Retrieve posting style examples from past_posts ---
-    const styleResults = await db
-      .collection("past_posts")
-      .aggregate([
-        {
-          $vectorSearch: {
-            index: "vector_index",
-            path: "embedding",
-            queryVector: queryEmbedding,
-            numCandidates: 100,
-            limit: 3,
-            filter: { userId: { $eq: userId }, platform: { $eq: platform } },
-          },
-        },
-        {
-          $project: {
-            message: 1,
-            postId: 1,
-            score: { $meta: "vectorSearchScore" },
-          },
-        },
-      ])
-      .toArray();
+    // --- Generate platform-agnostic post ---
+    let systemMessage = `You are an expert at writing engaging social media posts suitable for multiple platforms (Twitter, Facebook, LinkedIn).
 
-    const relevantStyle = styleResults
-      .filter((d) => d.score >= RELEVANCE_THRESHOLD)
-      .map((d) => `- ${d.message}`)
-      .join("\n");
-
-    // --- 3. Generate post - use context/style if available, otherwise generate random post ---
-    const platformGuidelines = getPlatformSpecificGuidelines(platform);
-    let systemMessage = `You are an expert at writing engaging, platform-optimized social media posts. ${platformGuidelines}
-    
 CRITICAL OUTPUT RULES:
 - Output ONLY the final post text - NO preambles, explanations, or meta-commentary
 - DO NOT include phrases like "Here's a post:", "Sure, I can help:", "Here you go:", etc.
@@ -520,38 +449,48 @@ CRITICAL OUTPUT RULES:
 - Start directly with the post content itself
 - The output should be ready to publish immediately without any editing
 
-IMPORTANT: Follow these platform-specific rules strictly:
-- For Twitter: Maximum 280 characters, use 1-2 hashtags, be concise and punchy
-- For Facebook: Optimal 40-80 characters for high engagement, can be longer for storytelling, use 3-5 hashtags maximum
-- Always ensure the content is appropriate, professional, and engaging
-- Avoid inappropriate content, spam-like language, or excessive promotional tone
-- Use natural language that sounds authentic to the platform`;
+CONVERSATION CONTEXT:
+- You have access to the conversation history
+- When users reference "the previous post", "that post", "it", etc., they mean the last post you generated
+- Apply their requested changes/improvements to that specific post
+- Maintain continuity and context from previous messages
+
+PLATFORM CONSIDERATIONS:
+- Keep the post concise (aim for 250 characters or less for maximum compatibility)
+- Twitter has a 280-character limit, so brevity is key
+- Use 1-3 relevant hashtags maximum
+- Write in a clear, engaging, and professional tone
+- Ensure content is appropriate for a business/professional audience
+- Make it versatile enough to work across Twitter, Facebook, and LinkedIn
+
+STYLE GUIDELINES:
+- Be authentic and conversational
+- Use natural language that doesn't sound robotic
+- Avoid excessive punctuation, spam-like language, or promotional tone
+- Focus on value, insights, or engagement rather than hard sells`;
 
     let userMessage = `User request:\n${prompt}\n\n`;
-    let isRandomPost = false;
 
     if (relevantContext || relevantStyle) {
       // User has credentials and relevant data
       systemMessage +=
-        " Use the provided context to match the user's tone and style while following platform guidelines.";
+        "\n\nUse the provided context to match the user's tone and style while keeping the post versatile for multiple platforms.";
       userMessage +=
         (relevantContext
           ? `Context from user's Slack messages:\n${relevantContext}\n\n`
           : "") +
         (relevantStyle
-          ? `User's past ${platform} posts for style reference:\n${relevantStyle}\n\n`
+          ? `User's past social media posts for style reference:\n${relevantStyle}\n\n`
           : "") +
-        `Create a ${platform} post that matches the user's communication style from the examples above while following ${platform} best practices.`;
+        `Create a social media post that matches the user's communication style from the examples above.`;
     } else {
-      // User lacks credentials - generate random post with helpful message
+      // User lacks credentials - generate professional post
       systemMessage +=
-        " Since no user data is available, create a generic but engaging post following platform best practices.";
-      userMessage += `Create a professional and engaging ${platform} post about: "${prompt}". Follow ${platform} formatting guidelines and character limits.`;
-      isRandomPost = true;
+        "\n\nSince no user data is available, create a professional and engaging post suitable for all platforms.";
+      userMessage += `Create a professional and engaging social media post about: "${prompt}".`;
     }
 
-    // Build messages array with conversation context + recent raw messages
-    // We include: system message -> RAG/smart context -> recent raw messages -> current user message
+    // Build messages array with conversation context
     const messages: Array<{
       role: "system" | "user" | "assistant";
       content: string;
@@ -560,10 +499,8 @@ IMPORTANT: Follow these platform-specific rules strictly:
         role: "system",
         content: systemMessage,
       },
-      // Include RAG / smart context (condensed, relevant snippets)
-      ...conversationContext,
-      // Include the most recent raw conversation messages so the LLM sees the exact recent dialog
-      ...recentConversationMessages,
+      // Include conversation history from OpenAI Threads
+      ...conversationMessages,
       // Add current user message
       {
         role: "user",
@@ -579,79 +516,38 @@ IMPORTANT: Follow these platform-specific rules strictly:
 
     let rawPost = completion.choices[0].message?.content ?? "";
 
-    // Clean up any preambles or meta-commentary the LLM might have added
+    // Clean up any preambles or meta-commentary
     rawPost = rawPost
       .replace(
         /^(here's|here is|sure,?|of course,?|absolutely,?|certainly,?)[\s\S]*?:/i,
         ""
       )
       .replace(/^(i can help|i'll|i will|let me)[\s\S]*?:/i, "")
-      .replace(/^["']|["']$/g, "") // Remove surrounding quotes
+      .replace(/^["']|["']$/g, "")
       .trim();
 
-    // Validate content before processing
-    const validation = validateContent(rawPost);
-    if (!validation.isValid) {
-      console.warn("Generated content failed validation:", validation.reason);
-      // Regenerate with stricter guidelines if content is problematic
-      const sanitizedCompletion = await openai.chat.completions.create({
-        model: selectedModel,
-        messages: [
-          {
-            role: "system",
-            content:
-              systemMessage +
-              "\n\nIMPORTANT: The content must be professional, appropriate, and free from spam-like language, excessive punctuation, or inappropriate content. Output ONLY the post text without any preamble.",
-          },
-          {
-            role: "user",
-            content:
-              userMessage +
-              "\n\nPlease ensure the content is clean, professional, and appropriate for a business audience. Output only the post itself.",
-          },
-        ],
-        max_tokens: selectedMaxTokens,
-      });
-      let cleanPost =
-        sanitizedCompletion.choices[0].message?.content ?? rawPost;
-
-      // Clean up any preambles
-      cleanPost = cleanPost
-        .replace(
-          /^(here's|here is|sure,?|of course,?|absolutely,?|certainly,?)[\s\S]*?:/i,
-          ""
-        )
-        .replace(/^(i can help|i'll|i will|let me)[\s\S]*?:/i, "")
-        .replace(/^["']|["']$/g, "")
-        .trim();
-
-      // Apply platform-specific sanitization
-      let sanitizedPost = sanitizeForPlatform(cleanPost, platform);
-
-      // If still failing validation after regeneration, use fallback
-      const finalValidation = validateContent(sanitizedPost);
-      if (!finalValidation.isValid) {
-        sanitizedPost = `Here's a curated post for your ${platform} audience. Configure your sources and platforms for better content generation.`;
-      }
-
-      return {
-        post: sanitizedPost,
-        threadId: generateThreadId(),
-        platform: platform,
-        success: true,
-        isRandomPost,
-      };
+    // Basic length check for Twitter compatibility
+    if (rawPost.length > 280) {
+      console.warn(
+        `⚠️ Generated post exceeds Twitter limit (${rawPost.length} chars). This is acceptable - user can edit if needed.`
+      );
     }
 
-    // Apply platform-specific sanitization
-    const sanitizedPost = sanitizeForPlatform(rawPost, platform);
+    // Save to OpenAI Thread if threadId exists
+    if (state.threadId) {
+      try {
+        await addMessageToThread(state.threadId, "user", prompt);
+        await addMessageToThread(state.threadId, "assistant", rawPost);
+        console.log(`💾 Saved conversation to OpenAI thread ${state.threadId}`);
+      } catch (err) {
+        console.error("Error saving to OpenAI thread:", err);
+      }
+    }
 
     return {
-      post: sanitizedPost,
-      threadId: generateThreadId(),
-      platform: platform,
+      post: rawPost,
       success: true,
-      isRandomPost,
+      availablePlatforms: [...AVAILABLE_PLATFORMS],
     };
   } catch (dbError: any) {
     console.error("Database or OpenAI error in generatePost:", dbError);
@@ -671,10 +567,10 @@ async function getEmbedding(text: string) {
   return embeddingResp.data[0].embedding;
 }
 
+// Simplified workflow - no platform routing
 const generateWorkflow = new StateGraph<GraphState>({
   channels: {
     prompt: null,
-    platform: null,
     post: null,
     threadId: null,
     scheduleTime: null,
@@ -683,8 +579,11 @@ const generateWorkflow = new StateGraph<GraphState>({
     userId: null,
     model: null,
     maxTokens: null,
+    availablePlatforms: null,
+    isGreeting: null,
   },
 });
+
 generateWorkflow.addNode("checkGreeting", checkGreeting);
 generateWorkflow.addNode("extractScheduleTime", extractScheduleTime);
 generateWorkflow.addNode("generatePost", generatePost);
@@ -698,36 +597,6 @@ generateWorkflow.addConditionalEdges(
 );
 generateWorkflow.addEdge("generatePost" as any, END);
 const generateApp = generateWorkflow.compile();
-
-const postWorkflow = new StateGraph<GraphState>({
-  channels: {
-    prompt: null,
-    platform: null,
-    post: null,
-    threadId: null,
-    tokens: null,
-    userId: null,
-    authToken: null,
-    success: null,
-    error: null,
-    result: null,
-    attachments: null,
-  },
-});
-postWorkflow.addNode("twitterPosting", twitterPosting as any);
-postWorkflow.addNode("facebookPosting", facebookPosting as any);
-postWorkflow.addNode("linkedinPosting", linkedinPosting as any);
-postWorkflow.addConditionalEdges(START, (s: GraphState) =>
-  s.platform === "facebook"
-    ? "facebookPosting"
-    : s.platform === "linkedin"
-    ? "linkedinPosting"
-    : "twitterPosting"
-);
-postWorkflow.addEdge("twitterPosting" as any, END);
-postWorkflow.addEdge("facebookPosting" as any, END);
-postWorkflow.addEdge("linkedinPosting" as any, END);
-const postApp = postWorkflow.compile();
 
 export async function POST(req: NextRequest) {
   try {
@@ -748,113 +617,88 @@ export async function POST(req: NextRequest) {
     // Fetch user's plan to determine model configuration
     const db = await connectDB();
     const userDoc = await db.collection("users").findOne({ _id: user._id });
-    const planId = userDoc?.planId || 1; // Default to Basic plan if no planId
+    const planId = userDoc?.planId || 1;
     const modelConfig = getModelConfig(planId);
 
     console.log(
       `👤 User ${userId} | Plan ${planId} | Model: ${modelConfig.model} | Max Tokens: ${modelConfig.maxTokens}`
     );
 
-    // threadId: Optional - if provided, loads conversation history for context
-    // conversationHistory: Not used directly here (context loaded from DB via threadId)
     const body = await req.json();
     let prompt = body.prompt;
-    let platform = body.platform;
-    const threadId = body.threadId;
+    let threadId = body.threadId;
 
-    // Check for greetings first - no platform needed
+    // Validate threadId is a real OpenAI thread (they are typically 30+ chars)
+    const isValidOpenAIThread =
+      threadId && threadId.startsWith("thread_") && threadId.length > 30;
+
+    // Create OpenAI thread early if needed (for greetings and all other flows)
+    if (!isValidOpenAIThread) {
+      try {
+        threadId = await createThread();
+        console.log(`🆕 Created new OpenAI thread: ${threadId}`);
+      } catch (err) {
+        console.error("Failed to create OpenAI thread:", err);
+        threadId = null;
+      }
+    }
+
+    // Check which platforms the user has connected with valid credentials (moved early for reuse)
+    const connectedPlatforms: string[] = [];
+
+    // Helper to check if a string value is valid (not null, undefined, or empty)
+    const isValidToken = (token: unknown): boolean => {
+      return typeof token === "string" && token.length > 0;
+    };
+
+    // Twitter: check for valid accessToken
+    if (isValidToken(userDoc?.twitter?.accessToken)) {
+      connectedPlatforms.push("twitter");
+    }
+
+    // Facebook: check for valid accessToken AND pageId (both required for posting)
+    if (
+      isValidToken(userDoc?.facebook?.accessToken) &&
+      isValidToken(userDoc?.facebook?.pageId)
+    ) {
+      connectedPlatforms.push("facebook");
+    }
+
+    // LinkedIn: check for valid accessToken
+    if (isValidToken(userDoc?.linkedin?.accessToken)) {
+      connectedPlatforms.push("linkedin");
+    }
+
+    console.log(
+      `📱 Connected platforms for user ${userId}:`,
+      connectedPlatforms
+    );
+
+    // Check for greetings first
     if (detectGreeting(prompt)) {
       const greetingResult = await handleGreeting({
         prompt,
         platform: "",
         userId,
       });
+
+      // Save greeting to OpenAI thread for conversation continuity
+      if (threadId) {
+        try {
+          await addMessageToThread(threadId, "user", prompt);
+          await addMessageToThread(threadId, "assistant", greetingResult.post);
+          console.log(`💾 Saved greeting to OpenAI thread ${threadId}`);
+        } catch (err) {
+          console.error("Error saving greeting to OpenAI thread:", err);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         greeting: true,
         message: greetingResult.post,
+        threadId, // Return threadId for conversation continuity
       });
-    }
-
-    // If the user provided a short follow-up like "continue" or "change..." and
-    // a threadId is present, attempt to modify/continue the last AI draft from the conversation
-    // BEFORE platform detection so we can inherit the platform from the previous draft.
-    if (
-      (threadId && /^\s*(continue)\s*$/i.test(prompt.trim())) ||
-      (threadId && /^\s*(change)\b/i.test(prompt.trim()))
-    ) {
-      try {
-        const conv = await db.collection("chatHistory").findOne({
-          userId,
-          threadId,
-        });
-        if (conv && conv.messages && Array.isArray(conv.messages)) {
-          // Find the last AI message in the conversation
-          const msgs = conv.messages.slice().reverse();
-          const lastAi = msgs.find((m: any) => m.sender === "ai" && m.content);
-          if (lastAi && lastAi.content) {
-            const trimmed = prompt.trim();
-            if (/^\s*(continue)\s*$/i.test(trimmed)) {
-              // Clean last AI content to remove instructional UI lines (e.g., connect-account prompts)
-              const cleaned = lastAi.content
-                .replace(/🔗.*connect.*account.*$/i, "")
-                .replace(/🔜.*next post.*$/i, "")
-                .trim();
-              prompt = `Continue the following draft:\n\n${cleaned}`;
-            } else if (/^\s*(change)\b/i.test(trimmed)) {
-              const changeInstr = trimmed.replace(/^change\b/i, "").trim();
-              if (!changeInstr) {
-                return NextResponse.json(
-                  {
-                    success: false,
-                    error:
-                      "Please specify how you'd like the post changed (e.g., 'change to be more casual')",
-                  },
-                  { status: 400 }
-                );
-              }
-              const cleaned = lastAi.content
-                .replace(/🔗.*connect.*account.*$/i, "")
-                .replace(/🔜.*next post.*$/i, "")
-                .trim();
-              prompt = `Modify the following draft:\n\n${cleaned}\n\nChange: ${changeInstr}`;
-            }
-
-            // If platform wasn't provided, prefer the conversation-level platform
-            // (chatHistory stores `platform`) and fall back to the last AI message.
-            if (!platform) {
-              platform = conv.platform || lastAi.platform || undefined;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching conversation for continue/change:", err);
-      }
-    }
-
-    const platformResult = detectPlatform(prompt, platform);
-    // If we inferred a platform from the conversation earlier, prefer it as the effective platform
-    const effectivePlatform = platform || platformResult.platform;
-    if (!platformResult.platform || platformResult.error) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: platformResult.error || "Could not detect platform",
-        },
-        { status: 400 }
-      );
-    }
-
-    // If user only mentioned the platform (e.g., "twitter" or "facebook") without a topic,
-    // ask them to provide the topic to post about.
-    if (!hasTopic(prompt, effectivePlatform || "")) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Please provide the topic you want to post about",
-        },
-        { status: 400 }
-      );
     }
 
     // Check for recurrence in the prompt
@@ -864,7 +708,6 @@ export async function POST(req: NextRequest) {
     if (recurrenceResult.hasRecurrence && recurrenceResult.frequency) {
       const timeResult = await extractRecurrenceTime({
         prompt,
-        platform: effectivePlatform,
         userId,
       });
 
@@ -878,27 +721,27 @@ export async function POST(req: NextRequest) {
           frequency: recurrenceResult.frequency,
           time: timeResult.result?.recurrenceTime || "12:00",
           timestamp: timeResult.scheduleTime,
-          platform: platformResult.platform,
           prompt,
           detectedDays: detectedDays.length > 0 ? detectedDays : undefined,
+          availablePlatforms: connectedPlatforms, // Include connected platforms for selection
         },
       });
     }
 
-    // Continue with existing one-time scheduling logic
+    // Thread is already created/validated above, proceed with generation
+
+    // Generate post using workflow
     const result = await generateApp.invoke({
       prompt,
-      platform: effectivePlatform,
       userId,
-      threadId: threadId || undefined, // Pass threadId for conversation context
-      model: modelConfig.model, // Pass selected model based on plan
-      maxTokens: modelConfig.maxTokens, // Pass max tokens based on plan
+      threadId,
+      model: modelConfig.model,
+      maxTokens: modelConfig.maxTokens,
     });
 
-    if (result.success === false)
+    if (result.success === false) {
       return NextResponse.json(result, { status: 400 });
-
-    // db already initialized at the top of POST function, reuse it
+    }
 
     // Handle greeting responses
     if (result.isGreeting) {
@@ -909,21 +752,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Handle scheduled posts
     if (result.scheduleTime && typeof result.scheduleTime === "string") {
-      // Store scheduled post with prompt only (post will be generated at scheduled time)
       const inserted = await db.collection("scheduledPosts").insertOne({
         userId,
         prompt,
-        platform: platformResult.platform,
         scheduleTime: result.scheduleTime,
-        status: "scheduled", // Keep as "scheduled" until the time arrives
+        status: "scheduled",
         isScheduled: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
 
-      // Schedule with Agenda (MongoDB-based scheduler)
-      // The worker will generate the post content when the time comes
+      // Schedule with Agenda
       const { schedulePost } = await import(
         "../../../../workers/schedulePostWorker"
       );
@@ -934,12 +775,10 @@ export async function POST(req: NextRequest) {
         scheduleDate
       );
 
-      // Store job ID in MongoDB for tracking and cancellation
       await db
         .collection("scheduledPosts")
         .updateOne({ _id: inserted.insertedId }, { $set: { jobId } });
 
-      // Format the scheduled time in user's local timezone for display
       const scheduledDate = new Date(result.scheduleTime);
       const localTimeString = scheduledDate.toLocaleString("en-US", {
         weekday: "short",
@@ -955,31 +794,23 @@ export async function POST(req: NextRequest) {
         success: true,
         scheduled: true,
         message: `Post scheduled for ${localTimeString}. It will be generated and ready for review at the scheduled time.`,
-        scheduleTime: result.scheduleTime, // UTC time for database
-        scheduleTimeLocal: localTimeString, // Formatted local time for display
-        platform: platformResult.platform,
+        scheduleTime: result.scheduleTime,
+        scheduleTimeLocal: localTimeString,
+        threadId, // Return threadId for conversation continuity
       });
     }
 
-    // Check if user has credentials for the detected platform
-    // userDoc already fetched at the top of POST function, reuse it
-    const hasCredentials =
-      effectivePlatform === "twitter"
-        ? userDoc?.twitter
-        : effectivePlatform === "facebook"
-        ? userDoc?.facebook
-        : effectivePlatform === "linkedin"
-        ? userDoc?.linkedin
-        : null;
+    const hasAnyCredentials = connectedPlatforms.length > 0;
 
+    // Return post for review with platform selection
     return NextResponse.json({
       success: true,
       review: {
         post: result.post,
-        threadId: result.threadId,
-        platform: effectivePlatform || result.platform,
+        threadId: threadId || result.threadId,
+        availablePlatforms: connectedPlatforms, // Only show platforms user has connected
         userId,
-        hasCredentials: !!hasCredentials,
+        hasCredentials: hasAnyCredentials,
       },
     });
   } catch (err: any) {
@@ -987,7 +818,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: false,
       error:
-        "Oops! Something went wrong while processing your request. Please try again, and if the problem persists, check your internet connection or try a different request. 🔄",
+        "Oops! Something went wrong while processing your request. Please try again! 🔄",
     });
   }
 }
@@ -1011,38 +842,39 @@ export async function PUT(req: NextRequest) {
     // Check Content-Type to determine if we're receiving FormData or JSON
     const contentType = req.headers.get("content-type") || "";
     let post: string;
-    let platform: string;
+    let platforms: string[];
     let threadId: string;
     let isScheduled: boolean;
     let _id: string | null;
     let attachments: File[] = [];
 
     if (contentType.includes("multipart/form-data")) {
-      // Handle FormData (with potential attachments)
       const formData = await req.formData();
       post = formData.get("post") as string;
-      platform = formData.get("platform") as string;
+      const platformsStr = formData.get("platforms") as string;
+      platforms = JSON.parse(platformsStr || "[]");
       threadId = formData.get("threadId") as string;
       isScheduled = formData.get("isScheduled") === "true";
       _id = formData.get("_id") as string | null;
       attachments = formData.getAll("attachments") as File[];
     } else {
-      // Handle JSON (no attachments)
       const body = await req.json();
       post = body.post;
-      platform = body.platform;
+      // Support both platforms array and legacy platform string
+      platforms = body.platforms || (body.platform ? [body.platform] : []);
       threadId = body.threadId;
       isScheduled = body.isScheduled || false;
       _id = body._id || null;
       attachments = [];
     }
 
-    const platformResult = detectPlatform(post, platform);
-    if (!platformResult.platform || platformResult.error) {
+    // Validate platforms
+    const validation = validatePlatforms(platforms);
+    if (!validation.valid) {
       return NextResponse.json(
         {
           success: false,
-          error: platformResult.error || "Could not detect platform",
+          error: validation.error,
         },
         { status: 400 }
       );
@@ -1055,132 +887,120 @@ export async function PUT(req: NextRequest) {
         {
           success: false,
           error:
-            "I couldn't find your account details. Please try logging out and back in, or contact support if the issue persists. 👤",
+            "I couldn't find your account details. Please try logging out and back in! 👤",
         },
         { status: 404 }
       );
     }
 
+    // Build tokens object
     const tokens = {
       twitter: userDoc?.twitter?.accessToken
         ? {
             accessToken: decrypt(userDoc.twitter.accessToken),
           }
-        : null,
+        : undefined,
       facebook: userDoc?.facebook
         ? {
             pageId: userDoc.facebook.pageId,
             accessToken: decrypt(userDoc.facebook.accessToken),
           }
-        : null,
+        : undefined,
       linkedin: userDoc?.linkedin?.accessToken
         ? {
             accessToken: decrypt(userDoc.linkedin.accessToken),
             personUrn: userDoc.linkedin.personUrn,
           }
-        : null,
-      slack: userDoc?.slack?.userAccessToken
-        ? decrypt(userDoc.slack.userAccessToken)
-        : null,
+        : undefined,
     };
 
-    // Apply final sanitization before posting
-    const sanitizedPostContent = sanitizeForPlatform(
-      post,
-      platformResult.platform
-    );
-
     const authHeader = req.headers.get("authorization") ?? "";
-    const postResult = await postApp.invoke({
-      post: sanitizedPostContent,
-      platform: platformResult.platform,
-      threadId,
-      userId,
+
+    // Distribute to multiple platforms in parallel
+    const results = await distributeToMultiplePlatforms({
+      post,
+      platforms,
       tokens,
+      userId,
       authToken: authHeader,
       attachments,
     });
 
-    // Check for posting errors or failures
-    if (postResult.error || postResult.success === false) {
+    // Check if any posting failed
+    const failures = results.filter((r) => !r.success);
+    const successes = results.filter((r) => r.success);
+
+    if (failures.length > 0 && successes.length === 0) {
+      // All failed
       return NextResponse.json(
         {
           success: false,
-          error:
-            postResult.error ||
-            `I couldn't publish your post to ${platformResult.platform}. This could be due to platform API issues, credential problems, or connectivity issues. Please check your ${platformResult.platform} connection in settings and try again. 📱`,
+          error: `Failed to post to all platforms: ${failures
+            .map((f) => `${f.platform}: ${f.error}`)
+            .join(", ")}`,
+          results,
         },
         { status: 500 }
       );
     }
 
-    // Check if posting was actually successful
-    if (!postResult.success && !postResult.posted) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `The post to ${platformResult.platform} may not have been published successfully. Please check your ${platformResult.platform} account to verify. 📝`,
-        },
-        { status: 500 }
-      );
-    }
-
-    // Delete scheduled post after successful posting (reusing DELETE logic)
+    // Delete scheduled post after successful posting
     if (isScheduled && _id) {
       try {
-        // Find the post first to get jobId
-        const post = await db.collection("scheduledPosts").findOne({
+        const scheduledPost = await db.collection("scheduledPosts").findOne({
           _id: new ObjectId(_id),
           userId,
         });
 
-        if (post) {
-          // Cancel the Agenda job if it exists
-          if (post.jobId) {
+        if (scheduledPost) {
+          if (scheduledPost.jobId) {
             try {
               const { cancelScheduledPost } = await import(
                 "../../../../workers/schedulePostWorker"
               );
-              await cancelScheduledPost(post.jobId);
-              console.log(
-                `✅ Cancelled Agenda job ${post.jobId} for posted scheduled post`
-              );
+              await cancelScheduledPost(scheduledPost.jobId);
+              console.log(`✅ Cancelled Agenda job ${scheduledPost.jobId}`);
             } catch (err) {
               console.error("Failed to cancel Agenda job:", err);
-              // Continue with deletion even if cancellation fails
             }
           }
 
-          // Delete from MongoDB
-          const deleteResult = await db.collection("scheduledPosts").deleteOne({
+          await db.collection("scheduledPosts").deleteOne({
             _id: new ObjectId(_id),
             userId,
           });
-          console.log(
-            `✅ Deleted scheduled post ${_id} after successful posting, deletedCount: ${deleteResult.deletedCount}`
-          );
-        } else {
-          console.log(
-            `⚠️ Scheduled post ${_id} not found for deletion (may have been already deleted)`
-          );
+          console.log(`✅ Deleted scheduled post ${_id}`);
         }
       } catch (deleteErr) {
-        console.error(`❌ Error deleting scheduled post ${_id}:`, deleteErr);
-        // Don't fail the request if deletion fails - the post was successfully published
+        console.error(`❌ Error deleting scheduled post:`, deleteErr);
       }
     }
 
+    // Return results
+    if (failures.length > 0) {
+      // Partial success
+      return NextResponse.json({
+        success: true,
+        posted: true,
+        partial: true,
+        message: `Posted to ${successes.length}/${platforms.length} platform(s). Some platforms failed.`,
+        results,
+      });
+    }
+
+    // Complete success
     return NextResponse.json({
       success: true,
       posted: true,
-      result: postResult,
+      message: `Successfully posted to ${successes.length} platform(s)!`,
+      results,
     });
   } catch (err: any) {
     console.error("PUT request failed:", err);
     return NextResponse.json({
       success: false,
       error:
-        "I couldn't publish your post right now. This might be due to platform connectivity issues or credential problems. Please check your platform connections in settings and try again. 📱",
+        "I couldn't publish your post right now. Please check your platform connections and try again. 📱",
     });
   }
 }

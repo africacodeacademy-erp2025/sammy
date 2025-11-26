@@ -15,7 +15,8 @@ export interface RecurringPost {
   _id: string;
   userId: string;
   prompt: string;
-  platform: string;
+  platform?: string; // Legacy single platform
+  platforms?: string[]; // New multi-platform array
   frequency: "daily" | "weekly" | "monthly";
   time: string; // HH:mm format
   selectedDays?: number[] | null;
@@ -174,6 +175,7 @@ export default function RecurringPostsView({
           time: settings.time,
           selectedDays: settings.selectedDays,
           selectedMonths: settings.selectedMonths,
+          platforms: settings.platforms, // Include platforms array
           timezoneOffset: settings.timezoneOffset, // Include timezone offset
         }),
       });
@@ -322,11 +324,24 @@ export default function RecurringPostsView({
                   {/* Header with Platform and Status */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 text-xs font-medium rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                        {post.platform === "twitter"
-                          ? "𝕏 Twitter"
-                          : "📘 Facebook"}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {(post.platforms || [post.platform])
+                          .filter(Boolean)
+                          .map((p) => (
+                            <span
+                              key={p}
+                              className="px-3 py-1 text-xs font-medium rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                            >
+                              {p === "twitter"
+                                ? "𝕏 Twitter"
+                                : p === "facebook"
+                                ? "📘 Facebook"
+                                : p === "linkedin"
+                                ? "💼 LinkedIn"
+                                : p}
+                            </span>
+                          ))}
+                      </div>
                       <span
                         className={`px-3 py-1 text-xs font-medium rounded-full ${
                           post.isActive
@@ -464,9 +479,12 @@ export default function RecurringPostsView({
           onConfirm={handleUpdateRecurrence}
           frequency={editingPost.frequency}
           time={editingPost.time}
-          platform={editingPost.platform}
           prompt={editingPost.prompt}
           detectedDays={editingPost.selectedDays || undefined}
+          availablePlatforms={
+            editingPost.platforms ||
+            (editingPost.platform ? [editingPost.platform] : [])
+          }
         />
       )}
     </div>

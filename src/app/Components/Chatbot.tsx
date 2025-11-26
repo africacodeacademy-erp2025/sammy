@@ -42,18 +42,12 @@ export default function ChatBot() {
     frequency: "daily" | "weekly" | "monthly";
     time: string;
     timestamp: string;
-    platform: string;
     prompt: string;
     detectedDays?: number[];
+    availablePlatforms?: string[];
   } | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
-  // Follow-up confirmation UI state (for 'continue' / 'change' when thread exists)
-  const [followupInfo, setFollowupInfo] = useState<{
-    type: "continue" | "change";
-    changeInstr?: string;
-  } | null>(null);
-  const [followupConfirmVisible, setFollowupConfirmVisible] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -176,12 +170,16 @@ export default function ChatBot() {
     []
   );
 
-  // Generate a unique threadId for new conversations
-  const generateThreadId = useCallback(() => {
-    return `thread_${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2, 11)}`;
-  }, []);
+  const handlePlatformSelectionChange = useCallback(
+    (id: string, platforms: string[]) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === id ? { ...msg, selectedPlatforms: platforms } : msg
+        )
+      );
+    },
+    []
+  );
 
   // Save conversation to chat history
   const saveConversation = useCallback(
@@ -209,10 +207,7 @@ export default function ChatBot() {
 
         const messagesToSave = messageList.filter((m) => !isTransient(m));
 
-        // Extract platform from messagesToSave (if any)
-        const platformMessage = messagesToSave.find((m) => m.platform);
-        const platform = platformMessage?.platform;
-
+        // No longer saving platform info - posts are multi-platform now
         await fetch("/api/chat-history", {
           method: "POST",
           headers: {
@@ -222,7 +217,6 @@ export default function ChatBot() {
           body: JSON.stringify({
             threadId,
             messages: messagesToSave,
-            platform,
           }),
         });
 
@@ -318,33 +312,9 @@ export default function ChatBot() {
     }
   }, []);
 
-  const sendMessage = async (skipConfirm = false) => {
+  const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userInput = input.trim();
-
-    const parseFollowup = (text: string) => {
-      const t = text.trim();
-      if (/^continue$/i.test(t)) return { type: "continue" as const };
-      const m = t.match(/^change\b(.*)/i);
-      if (m) return { type: "change" as const, changeInstr: m[1].trim() };
-      return null;
-    };
-
-    const parsedFollowup = parseFollowup(userInput);
-    // If this looks like a follow-up and we have an active thread, require confirmation first
-    if (parsedFollowup && currentThreadId && !skipConfirm) {
-      // If it's a 'change' with no instruction, prompt user to add more detail instead of confirming
-      if (parsedFollowup.type === "change" && !parsedFollowup.changeInstr) {
-        setFollowupInfo(parsedFollowup);
-        setFollowupConfirmVisible(false);
-        // Focus textarea for user to add the change instruction
-        setTimeout(() => textareaRef.current?.focus(), 50);
-        return;
-      }
-      setFollowupInfo(parsedFollowup);
-      setFollowupConfirmVisible(true);
-      return;
-    }
 
     addMessage({ sender: "user", content: userInput });
     setInput("");
@@ -356,13 +326,8 @@ export default function ChatBot() {
 
       const token = localStorage.getItem("token");
 
-      // Generate threadId for new conversations (first message)
+      // Use existing threadId or let backend create a new one
       let threadId = currentThreadId;
-      if (!threadId) {
-        threadId = generateThreadId();
-        setCurrentThreadId(threadId);
-        console.log(`🆕 New conversation started: ${threadId}`);
-      }
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -395,12 +360,19 @@ export default function ChatBot() {
         };
         addMessage(aiMessage);
 
+        // Update threadId with OpenAI thread ID from backend if provided
+        if (data.threadId && data.threadId !== threadId) {
+          setCurrentThreadId(data.threadId);
+          threadId = data.threadId;
+          console.log(`🔄 Updated to OpenAI thread: ${threadId}`);
+        }
+
         // Auto-save conversation after AI response
         if (threadId) {
           // Wait a bit for state to update, then save
           setTimeout(() => {
             setMessages((currentMessages) => {
-              saveConversation(threadId, currentMessages);
+              saveConversation(threadId!, currentMessages);
               return currentMessages;
             });
           }, 100);
@@ -414,7 +386,6 @@ export default function ChatBot() {
           const aiMessage = {
             sender: "ai" as const,
             content: `🔒 Recurring schedules are available on Pro and Business plans. Please upgrade to use this feature.`,
-            platform: data.recurrenceData?.platform,
             status: "warning" as const,
           } as any;
           addMessage(aiMessage);
@@ -423,7 +394,7 @@ export default function ChatBot() {
           if (threadId) {
             setTimeout(() => {
               setMessages((currentMessages) => {
-                saveConversation(threadId, currentMessages);
+                saveConversation(threadId!, currentMessages);
                 return currentMessages;
               });
             }, 100);
@@ -435,7 +406,6 @@ export default function ChatBot() {
           const aiMessage = {
             sender: "ai" as const,
             content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
-            platform: data.recurrenceData?.platform,
           };
           addMessage(aiMessage);
 
@@ -443,7 +413,7 @@ export default function ChatBot() {
           if (threadId) {
             setTimeout(() => {
               setMessages((currentMessages) => {
-                saveConversation(threadId, currentMessages);
+                saveConversation(threadId!, currentMessages);
                 return currentMessages;
               });
             }, 100);
@@ -458,77 +428,59 @@ export default function ChatBot() {
         };
         addMessage(aiMessage);
 
+        // Update threadId with OpenAI thread ID from backend if provided
+        if (data.threadId && data.threadId !== threadId) {
+          setCurrentThreadId(data.threadId);
+          threadId = data.threadId;
+          console.log(`🔄 Updated to OpenAI thread: ${threadId}`);
+        }
+
         // Auto-save conversation
         if (threadId) {
           setTimeout(() => {
             setMessages((currentMessages) => {
-              saveConversation(threadId, currentMessages);
+              saveConversation(threadId!, currentMessages);
               return currentMessages;
             });
           }, 100);
         }
       } else {
-        // Check if user has credentials for the platform
+        // Normal post generation - show with platform selection
+        const aiMessage = {
+          sender: "ai" as const,
+          content: data.review?.post || data.message,
+          status: "pending" as const,
+          threadId: data.review?.threadId,
+          availablePlatforms: data.review?.availablePlatforms || [], // Only show connected platforms
+          selectedPlatforms: [], // User must select platforms
+        };
+        addMessage(aiMessage);
+
+        // Update threadId with OpenAI thread ID from backend
+        if (data.review?.threadId && data.review.threadId !== threadId) {
+          setCurrentThreadId(data.review.threadId);
+          threadId = data.review.threadId;
+          console.log(`🔄 Updated to OpenAI thread: ${threadId}`);
+        }
+
+        // Add hint if user has no credentials
         if (data.review?.hasCredentials === false) {
-          // User doesn't have credentials for this platform
-          const platformName =
-            data.review?.platform === "twitter"
-              ? "Twitter"
-              : data.review?.platform === "facebook"
-              ? "Facebook"
-              : data.review?.platform === "linkedin"
-              ? "LinkedIn"
-              : data.review?.platform;
-
-          // Add the draft content as a normal AI message (so it becomes part of the conversation)
-          const draftMessage = {
-            sender: "ai" as const,
-            content: data.review?.post || data.message,
-            platform: data.review?.platform,
-            // No status so there are no post action buttons (user cannot post without credentials)
-          };
-          addMessage(draftMessage);
-
-          // Add a separate transient warning/hint message that should NOT be saved to chatHistory
           const hintMessage = {
             sender: "ai" as const,
-            content: `🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
-            platform: data.review?.platform,
-            // Mark as warning so it will be filtered from saved history
+            content: `🔗 Please connect your social media accounts in the credentials settings to enable posting!`,
             status: "warning" as const,
           };
-          // cast to any to avoid strict status typing in Message type
           addMessage(hintMessage as any);
+        }
 
-          // Auto-save conversation
-          if (threadId) {
-            setTimeout(() => {
-              setMessages((currentMessages) => {
-                saveConversation(threadId, currentMessages);
-                return currentMessages;
-              });
-            }, 100);
-          }
-        } else {
-          // User has credentials - show normal pending status with action buttons
-          const aiMessage = {
-            sender: "ai" as const,
-            content: data.review?.post || data.message,
-            status: "pending" as const,
-            threadId: data.review?.threadId,
-            platform: data.review?.platform,
-          };
-          addMessage(aiMessage);
-
-          // Auto-save conversation
-          if (threadId) {
-            setTimeout(() => {
-              setMessages((currentMessages) => {
-                saveConversation(threadId, currentMessages);
-                return currentMessages;
-              });
-            }, 100);
-          }
+        // Auto-save conversation
+        if (threadId) {
+          setTimeout(() => {
+            setMessages((currentMessages) => {
+              saveConversation(threadId!, currentMessages);
+              return currentMessages;
+            });
+          }, 100);
         }
       }
     } catch (err: unknown) {
@@ -547,7 +499,7 @@ export default function ChatBot() {
       if (currentThreadId) {
         setTimeout(() => {
           setMessages((currentMessages) => {
-            saveConversation(currentThreadId, currentMessages);
+            saveConversation(currentThreadId!, currentMessages);
             return currentMessages;
           });
         }, 100);
@@ -558,21 +510,33 @@ export default function ChatBot() {
     }
   };
 
-  const handleApproveDraft = async (id: string) => {
+  const handleApproveDraft = async (
+    id: string,
+    selectedPlatforms: string[]
+  ) => {
     const draft = messages.find((msg) => msg.id === id);
     if (!draft || draft.status !== "pending" || !draft.threadId) return;
+
+    // Validate platform selection
+    if (!selectedPlatforms || selectedPlatforms.length === 0) {
+      addMessage({
+        sender: "ai",
+        content: "Please select at least one platform to post to!",
+        status: "error",
+      });
+      return;
+    }
 
     updateMessageStatus(id, "posting");
 
     try {
       const formData = new FormData();
       formData.append("post", draft.content);
-      if (draft.platform) {
-        formData.append("platform", draft.platform);
-      }
+      formData.append("platforms", JSON.stringify(selectedPlatforms)); // Send platforms array
       formData.append("threadId", draft.threadId);
 
       console.log("=== ChatBot Debug ===");
+      console.log("Selected platforms:", selectedPlatforms);
       console.log("Draft attachments:", draft.attachments?.length || 0);
 
       if (draft.attachments) {
@@ -584,17 +548,6 @@ export default function ChatBot() {
         });
       }
 
-      console.log("FormData entries:");
-      for (const [key, value] of formData.entries()) {
-        if (value instanceof File) {
-          console.log(
-            `${key}: File(${value.name}, ${value.size} bytes, ${value.type})`
-          );
-        } else {
-          console.log(`${key}: ${value}`);
-        }
-      }
-
       const res = await fetch("/api/agent", {
         method: "PUT",
         headers: {
@@ -604,9 +557,9 @@ export default function ChatBot() {
       });
 
       const data = await res.json();
-      console.log("Post response:", { status: res.status, data }); // Debug log
+      console.log("Post response:", { status: res.status, data });
 
-      // Check for various error conditions
+      // Check for errors
       if (!res.ok || data.error || data.success === false) {
         updateMessageStatus(id, "error");
         addMessage({
@@ -619,21 +572,40 @@ export default function ChatBot() {
         return;
       }
 
-      // Verify that the post was actually successful
-      if (!data.posted && !data.success) {
-        updateMessageStatus(id, "error");
+      // Handle partial success (some platforms failed)
+      if (data.partial) {
+        updateMessageStatus(id, "posted");
+
+        // Update the message with successful platforms only
+        const successfulPlatforms = data.results
+          .filter((r: any) => r.success)
+          .map((r: any) => r.platform);
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === id
+              ? { ...msg, selectedPlatforms: successfulPlatforms }
+              : msg
+          )
+        );
+
         addMessage({
           sender: "ai",
-          content:
-            "The post may not have been published successfully. Please check your social media account to verify.",
-          status: "error",
+          content: data.message || "Posted to some platforms successfully.",
+          status: "posted",
         });
         return;
       }
 
+      // Complete success
       updateMessageStatus(id, "posted");
+
+      // Update message with posted platforms
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === id ? { ...msg, selectedPlatforms } : msg))
+      );
     } catch (err: unknown) {
-      console.error("Post request failed:", err); // Debug log
+      console.error("Post request failed:", err);
       updateMessageStatus(id, "error");
       const message =
         err instanceof Error
@@ -732,7 +704,6 @@ export default function ChatBot() {
           addMessage({
             sender: "ai",
             content: `🔒 Recurring schedules are available on Pro and Business plans. Please upgrade to use this feature.`,
-            platform: data.recurrenceData?.platform,
             status: "warning" as const,
           } as any);
         } else {
@@ -741,7 +712,6 @@ export default function ChatBot() {
           addMessage({
             sender: "ai",
             content: `🔄 I detected a recurring schedule request! Opening the recurrence settings modal for you to configure the details...`,
-            platform: data.recurrenceData?.platform,
           });
         }
       } else if (data.scheduled) {
@@ -749,29 +719,17 @@ export default function ChatBot() {
           sender: "ai",
           content: data.message,
           status: "scheduled" as const,
-          platform: data.platform,
         });
       } else {
         if (data.review?.hasCredentials === false) {
-          const platformName =
-            data.review?.platform === "twitter"
-              ? "Twitter"
-              : data.review?.platform === "facebook"
-              ? "Facebook"
-              : data.review?.platform === "linkedin"
-              ? "LinkedIn"
-              : data.review?.platform;
-
           addMessage({
             sender: "ai",
             content: data.review?.post || data.message,
-            platform: data.review?.platform,
           });
 
           addMessage({
             sender: "ai",
-            content: `🔗 To publish this ${platformName} post, please connect your ${platformName} account in the credentials settings first!`,
-            platform: data.review?.platform,
+            content: `🔗 Please connect your social media accounts in the credentials settings to enable posting!`,
             status: "warning" as const,
           } as any);
         } else {
@@ -780,7 +738,8 @@ export default function ChatBot() {
             content: data.review?.post || data.message,
             status: "pending" as const,
             threadId: data.review?.threadId,
-            platform: data.review?.platform,
+            availablePlatforms: data.review?.availablePlatforms || [], // Only show connected platforms
+            selectedPlatforms: [],
           });
         }
       }
@@ -990,9 +949,9 @@ export default function ChatBot() {
           onConfirm={handleRecurrenceConfirm}
           frequency={recurrenceData.frequency}
           time={recurrenceData.time}
-          platform={recurrenceData.platform}
           prompt={recurrenceData.prompt}
           detectedDays={recurrenceData.detectedDays}
+          availablePlatforms={recurrenceData.availablePlatforms || []}
         />
       )}
 
@@ -1146,6 +1105,7 @@ export default function ChatBot() {
                 isLatestAiMessage={msg.id === latestAiMessageId}
                 onAttachmentsChange={handleAttachmentsChange}
                 onEditSave={handleEditMessage}
+                onPlatformSelectionChange={handlePlatformSelectionChange}
               />
             ))}
 
@@ -1177,58 +1137,6 @@ export default function ChatBot() {
         {/* Input Area - Full Width Background */}
         <div className="fixed bottom-0 left-0 w-full z-20 bg-gray-950">
           <div className="max-w-[1200px] mx-auto px-2 sm:px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
-            {/* Follow-up confirmation banner (continue / change) */}
-            {followupConfirmVisible && followupInfo && (
-              <div className="mb-2 max-w-[1200px] mx-auto px-2 sm:px-4">
-                <div className="rounded-lg p-2 bg-gray-850 border border-gray-700 text-white flex items-center justify-between">
-                  <div className="text-sm">
-                    {followupInfo.type === "continue" ? (
-                      <>
-                        You're about to continue the last draft in this
-                        conversation. This will generate a new version based on
-                        the previous AI draft.
-                      </>
-                    ) : (
-                      <>
-                        You're about to modify the last draft
-                        {followupInfo.changeInstr
-                          ? `: "${followupInfo.changeInstr}"`
-                          : "."}
-                      </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        // Hide banner and proceed with sending (skip confirm)
-                        setFollowupConfirmVisible(false);
-                        setTimeout(() => sendMessage(true), 50);
-                      }}
-                      className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 py-1 rounded text-sm"
-                    >
-                      Continue
-                    </button>
-                    <button
-                      onClick={() => {
-                        setFollowupConfirmVisible(false);
-                        setFollowupInfo(null);
-                      }}
-                      className="px-3 py-1 rounded bg-gray-800 text-white text-sm border border-gray-700"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* If user typed 'change' but provided no instruction, prompt to add details */}
-            {followupInfo?.type === "change" && !followupInfo.changeInstr && (
-              <div className="mb-2 max-w-[1200px] mx-auto px-2 sm:px-4 text-sm text-gray-400">
-                Please specify how you'd like the post changed after "change".
-              </div>
-            )}
-
             <div className="flex flex-row items-end gap-2 w-full">
               <textarea
                 ref={textareaRef}

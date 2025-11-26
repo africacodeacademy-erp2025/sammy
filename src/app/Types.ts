@@ -13,7 +13,8 @@ export interface Message {
     | "scheduled"
     | "pending_approval";
   threadId?: string;
-  platform?: string;
+  availablePlatforms?: string[]; // NEW: Platforms available for posting
+  selectedPlatforms?: string[]; // NEW: Platforms selected by user
   timestamp: number | string;
   attachments?: File[];
 }
@@ -29,9 +30,10 @@ export interface ScheduledPost {
 
 export interface MessageBubbleProps {
   message: Message;
-  onApprove: (id: string) => void;
+  onApprove: (id: string, selectedPlatforms: string[]) => void; // Updated signature
   onReject: (id: string) => void;
   isLatestAiMessage: boolean;
   onEditSave?: (id: string, content: string) => void;
   onAttachmentsChange?: (id: string, attachments: File[]) => void;
+  onPlatformSelectionChange?: (id: string, platforms: string[]) => void; // NEW
 }

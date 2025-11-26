@@ -8,6 +8,10 @@ import {
   Calendar as CalendarIcon,
   Clock,
   CheckCircle,
+  Edit,
+  Trash2,
+  X,
+  Check,
 } from "lucide-react";
 
 export interface ScheduledPost {
@@ -15,7 +19,8 @@ export interface ScheduledPost {
   post?: string;
   _id: string;
   prompt: string;
-  platform: string;
+  platform?: string; // Legacy single platform
+  platforms?: string[]; // New multi-platform array
   scheduleTime: string;
   status: "scheduled" | "ready_for_review" | string;
   isScheduled?: boolean;
@@ -48,6 +53,14 @@ export default function ScheduledPostView({
   const [showReadyPosts, setShowReadyPosts] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(60);
   const [workerNextRun, setWorkerNextRun] = useState<Date | null>(null);
+
+  // Edit state for scheduled posts
+  const [editingScheduledPost, setEditingScheduledPost] = useState<
+    string | null
+  >(null);
+  const [editingPrompt, setEditingPrompt] = useState("");
+  const [editingDateTime, setEditingDateTime] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const token = localStorage.getItem("token");
 
@@ -98,9 +111,21 @@ export default function ScheduledPostView({
     }
   }, [token]);
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (id: string, selectedPlatforms?: string[]) => {
     const postToApprove = readyForReviewPosts.find((p) => p._id === id);
     if (!postToApprove) return;
+
+    // Use selected platforms from user choice, or fall back to post's platforms
+    const platformsToUse =
+      selectedPlatforms && selectedPlatforms.length > 0
+        ? selectedPlatforms
+        : postToApprove.platforms ||
+          (postToApprove.platform ? [postToApprove.platform] : []);
+
+    if (platformsToUse.length === 0) {
+      alert("Please select at least one platform to post to!");
+      return;
+    }
 
     // Update status locally to show "posting..."
     setReadyForReviewPosts((prev) =>
@@ -117,7 +142,7 @@ export default function ScheduledPostView({
         body: JSON.stringify({
           _id: postToApprove._id,
           post: postToApprove.post || postToApprove.prompt,
-          platform: postToApprove.platform,
+          platforms: platformsToUse,
           threadId: postToApprove.threadId || null,
           isScheduled: postToApprove.isScheduled,
         }),
@@ -163,6 +188,117 @@ export default function ScheduledPostView({
     setReadyForReviewPosts((prev) =>
       prev.map((p) => (p._id === id ? { ...p, post: content } : p))
     );
+  };
+
+  // Start editing a scheduled post
+  const handleStartEdit = (post: ScheduledPost) => {
+    setEditingScheduledPost(post._id);
+    setEditingPrompt(post.prompt);
+    // Convert ISO to datetime-local format
+    const date = new Date(post.scheduleTime);
+    const localDateTime = new Date(
+      date.getTime() - date.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .slice(0, 16);
+    setEditingDateTime(localDateTime);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingScheduledPost(null);
+    setEditingPrompt("");
+    setEditingDateTime("");
+  };
+
+  // Save edited scheduled post
+  const handleSaveScheduledPost = async (id: string) => {
+    if (!editingPrompt.trim()) {
+      alert("Prompt cannot be empty");
+      return;
+    }
+
+    const newScheduleTime = new Date(editingDateTime);
+    if (newScheduleTime <= new Date()) {
+      alert("Schedule time must be in the future");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch("/api/scheduledposts", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({
+          id,
+          prompt: editingPrompt,
+          scheduleTime: newScheduleTime.toISOString(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        alert(data.error || "Failed to update scheduled post");
+        return;
+      }
+
+      // Update local state
+      setScheduledPosts((prev) =>
+        prev.map((p) =>
+          p._id === id
+            ? {
+                ...p,
+                prompt: editingPrompt,
+                scheduleTime: newScheduleTime.toISOString(),
+              }
+            : p
+        )
+      );
+
+      // Clear editing state
+      handleCancelEdit();
+    } catch (err) {
+      console.error("Error updating scheduled post:", err);
+      alert("Failed to update scheduled post");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Delete a scheduled post
+  const handleDeleteScheduledPost = async (id: string) => {
+    if (
+      !confirm(
+        "Are you sure you want to delete this scheduled post? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/scheduledposts?id=${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to delete scheduled post");
+        return;
+      }
+
+      // Remove from local state
+      setScheduledPosts((prev) => prev.filter((post) => post._id !== id));
+    } catch (err) {
+      console.error("Error deleting scheduled post:", err);
+      alert("Failed to delete scheduled post");
+    }
   };
 
   useEffect(() => {
@@ -431,7 +567,12 @@ export default function ScheduledPostView({
                                 | "posted"
                                 | "error"
                                 | "rejected"),
-                        platform: post.platform,
+                        availablePlatforms:
+                          post.platforms ||
+                          (post.platform ? [post.platform] : []),
+                        threadId: post.threadId || undefined,
+                        _id: post._id,
+                        isScheduled: post.isScheduled,
                       }}
                       onApprove={handleApprove}
                       onReject={handleReject}
@@ -457,30 +598,117 @@ export default function ScheduledPostView({
                     key={post._id}
                     className="bg-gray-800/80 border border-gray-700/50 rounded-2xl p-4 md:p-6 hover:border-gray-600/50 transition-all"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm text-gray-400">
-                        Scheduled for {formatTime(post.scheduleTime)}
+                    {editingScheduledPost === post._id ? (
+                      // Edit mode
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs text-gray-400 mb-1 block">
+                            Prompt:
+                          </label>
+                          <textarea
+                            value={editingPrompt}
+                            onChange={(e) => setEditingPrompt(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-900 text-white rounded-lg border-2 border-purple-500 focus:outline-none resize-none"
+                            rows={3}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 mb-1 block">
+                            Schedule Time:
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={editingDateTime}
+                            onChange={(e) => setEditingDateTime(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-900 text-white rounded-lg border-2 border-purple-500 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={handleCancelEdit}
+                            disabled={isUpdating}
+                            className="px-3 py-1.5 text-sm text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-1"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveScheduledPost(post._id)}
+                            disabled={isUpdating}
+                            className="px-3 py-1.5 text-sm text-white bg-purple-600 rounded-lg hover:bg-purple-500 transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <Check className="w-4 h-4" />
+                            {isUpdating ? "Saving..." : "Save"}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                          {post.status === "scheduled"
-                            ? "⏰ Pending"
-                            : "✅ Ready"}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-white text-sm md:text-base leading-relaxed">
-                      {post.prompt}
-                    </p>
-                    {post.platform && (
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="text-xs text-gray-500">Platform:</span>
-                        <span className="px-2 py-0.5 text-xs font-medium rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                          {post.platform === "twitter"
-                            ? "𝕏 Twitter"
-                            : "📘 Facebook"}
-                        </span>
-                      </div>
+                    ) : (
+                      // View mode
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm text-gray-400">
+                            Scheduled for {formatTime(post.scheduleTime)}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                              {post.status === "scheduled"
+                                ? "⏰ Pending"
+                                : "✅ Ready"}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-white text-sm md:text-base leading-relaxed">
+                          {post.prompt}
+                        </p>
+                        {(post.platforms || post.platform) && (
+                          <div className="mt-3 flex items-center gap-2">
+                            <span className="text-xs text-gray-500">
+                              Platform
+                              {(post.platforms?.length || 0) > 1 ? "s" : ""}:
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {(post.platforms || [post.platform])
+                                .filter(Boolean)
+                                .map((p) => (
+                                  <span
+                                    key={p}
+                                    className="px-2 py-0.5 text-xs font-medium rounded bg-purple-500/20 text-purple-400 border border-purple-500/30 capitalize"
+                                  >
+                                    {p === "twitter"
+                                      ? "𝕏 Twitter"
+                                      : p === "facebook"
+                                      ? "📘 Facebook"
+                                      : p === "linkedin"
+                                      ? "💼 LinkedIn"
+                                      : p}
+                                  </span>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action buttons for pending posts */}
+                        {post.status === "scheduled" && (
+                          <div className="mt-4 flex justify-end gap-2 pt-3 border-t border-gray-700/50">
+                            <button
+                              onClick={() => handleStartEdit(post)}
+                              className="px-3 py-1.5 text-sm text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-1"
+                            >
+                              <Edit className="w-4 h-4" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleDeleteScheduledPost(post._id)
+                              }
+                              className="px-3 py-1.5 text-sm text-red-300 bg-red-900/30 rounded-lg hover:bg-red-900/50 transition-colors flex items-center gap-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}

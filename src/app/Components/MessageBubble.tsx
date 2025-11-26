@@ -13,6 +13,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 
 export default function MessageBubble({
@@ -22,6 +24,7 @@ export default function MessageBubble({
   isLatestAiMessage,
   onEditSave,
   onAttachmentsChange,
+  onPlatformSelectionChange,
 }: MessageBubbleProps) {
   const isUser = message.sender === "user";
   const [isVisible, setIsVisible] = useState(false);
@@ -29,6 +32,9 @@ export default function MessageBubble({
   const [editedContent, setEditedContent] = useState(message.content);
   const [showActions, setShowActions] = useState(false);
   const [showUserActions, setShowUserActions] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
+    message.selectedPlatforms || []
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const userActionsRef = useRef<HTMLDivElement>(null);
@@ -84,10 +90,26 @@ export default function MessageBubble({
     setShowUserActions(false);
   };
 
+  const handlePlatformToggle = (platform: string) => {
+    const newSelection = selectedPlatforms.includes(platform)
+      ? selectedPlatforms.filter((p) => p !== platform)
+      : [...selectedPlatforms, platform];
+
+    setSelectedPlatforms(newSelection);
+    if (onPlatformSelectionChange) {
+      onPlatformSelectionChange(message.id, newSelection);
+    }
+  };
+
   const handleApprove = () => {
-    // Set local state to show pending immediately
+    // Validate that at least one platform is selected
+    if (selectedPlatforms.length === 0) {
+      alert("Please select at least one platform to post to!");
+      return;
+    }
+
     if (onApprove) {
-      onApprove(message.id);
+      onApprove(message.id, selectedPlatforms);
     }
     setShowActions(false);
   };
@@ -125,18 +147,44 @@ export default function MessageBubble({
     }
   };
 
-  const handleReject = () => {
-    onReject(message.id);
-    setShowActions(false);
-  };
+  const availablePlatforms = message.availablePlatforms || [];
 
   const statusLabels: Record<string, React.ReactNode> = {
     pending: (
       <div className="flex flex-col gap-3 mt-3 p-3 bg-black/20 rounded-lg border border-white/10">
-        <span className="text-sm font-medium text-white/80 flex items-center gap-2">
-          <Clock className="w-4 h-4" />
-          Ready for review
-        </span>
+        {/* Platform Selection Checkboxes */}
+        {availablePlatforms.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-white/60 font-medium">
+              Select platforms to post:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {availablePlatforms.map((platform) => (
+                <button
+                  key={platform}
+                  onClick={() => handlePlatformToggle(platform)}
+                  className={`flex items-center gap-2 px-3 py-1.5 transition-all ${
+                    selectedPlatforms.includes(platform)
+                      ? "text-blue-300"
+                      : "text-gray-400"
+                  }`}
+                >
+                  {selectedPlatforms.includes(platform) ? (
+                    <CheckSquare className="w-4 h-4" />
+                  ) : (
+                    <Square className="w-4 h-4" />
+                  )}
+                  <span className="text-sm capitalize">{platform}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="text-xs text-amber-300/80">
+            ⚠️ No platforms connected. Please connect your social media accounts
+            in credentials settings to enable posting.
+          </div>
+        )}
 
         {isEditing ? (
           <div className="flex flex-col gap-2">
@@ -167,9 +215,10 @@ export default function MessageBubble({
           <div className="relative inline-block" ref={actionsRef}>
             <button
               onClick={() => setShowActions(!showActions)}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 text-white hover:from-purple-500/30 hover:to-blue-500/30 transition-all font-medium text-sm flex items-center gap-2"
+              className="px-3 py-2 rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2"
+              title="Actions"
             >
-              Actions
+              <span className="text-sm">Actions</span>
               <ChevronDown
                 className={`w-4 h-4 transition-transform ${
                   showActions ? "rotate-180" : ""
@@ -209,19 +258,34 @@ export default function MessageBubble({
                 </button>
 
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-green-500/20 transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                  className={`w-full px-4 py-2 text-left text-sm transition-colors flex items-center gap-2 border-b border-gray-700/50 ${
+                    selectedPlatforms.length === 0
+                      ? "text-gray-500 cursor-not-allowed"
+                      : "text-white hover:bg-green-500/20"
+                  }`}
                   onClick={handleApprove}
+                  disabled={selectedPlatforms.length === 0}
+                  title={
+                    selectedPlatforms.length === 0
+                      ? "Select at least one platform to post"
+                      : "Post to selected platforms"
+                  }
                 >
                   <Check className="w-4 h-4" />
-                  Approve
+                  Post
                 </button>
 
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-white hover:bg-rose-500/20 transition-colors flex items-center gap-2"
-                  onClick={handleReject}
+                  className="w-full px-4 py-2 text-left text-sm text-red-300 hover:bg-red-500/20 transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    if (onReject) {
+                      onReject(message.id);
+                    }
+                    setShowActions(false);
+                  }}
                 >
                   <X className="w-4 h-4" />
-                  Reject
+                  Delete draft
                 </button>
               </div>
             )}
@@ -336,11 +400,20 @@ export default function MessageBubble({
           </div>
 
           <div className="flex items-center gap-2">
-            {message.sender === "ai" && message.platform && (
-              <span className="text-xs px-2 py-0.5 rounded-lg bg-blue-500/20 text-blue-300">
-                {message.platform}
-              </span>
-            )}
+            {message.sender === "ai" &&
+              message.selectedPlatforms &&
+              message.selectedPlatforms.length > 0 && (
+                <div className="flex gap-1">
+                  {message.selectedPlatforms.map((p) => (
+                    <span
+                      key={p}
+                      className="text-xs px-2 py-0.5 rounded-lg bg-blue-500/20 text-blue-300 capitalize"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              )}
             <span className="text-xs opacity-50">
               {isUser ? "You" : "SaMMy"}
             </span>

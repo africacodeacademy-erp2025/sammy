@@ -176,18 +176,24 @@ export async function POST(req: NextRequest) {
       time,
       selectedDays,
       selectedMonths,
-      platform,
+      platforms, // Changed from platform to platforms array
       prompt,
       timezoneOffset,
     } = body;
 
     // Validate required fields
-    if (!frequency || !time || !platform || !prompt) {
+    if (
+      !frequency ||
+      !time ||
+      !platforms ||
+      platforms.length === 0 ||
+      !prompt
+    ) {
       return NextResponse.json(
         {
           success: false,
           error:
-            "Missing required fields: frequency, time, platform, or prompt",
+            "Missing required fields: frequency, time, platforms, or prompt",
         },
         { status: 400 }
       );
@@ -227,7 +233,9 @@ export async function POST(req: NextRequest) {
     );
 
     console.log(
-      `📅 Creating recurring post - Local time: ${time}, Timezone offset: ${timezoneOffset}min, UTC nextOccurrence: ${nextOccurrence.toISOString()}`
+      `📅 Creating recurring post - Local time: ${time}, Timezone offset: ${timezoneOffset}min, Platforms: ${platforms.join(
+        ", "
+      )}, UTC nextOccurrence: ${nextOccurrence.toISOString()}`
     );
 
     // Connect to database
@@ -237,7 +245,7 @@ export async function POST(req: NextRequest) {
     const recurringPost = {
       userId,
       prompt,
-      platform,
+      platforms, // Store as array of platforms
       frequency,
       time, // Store time in HH:mm format
       selectedDays: selectedDays || null,
@@ -270,7 +278,8 @@ export async function POST(req: NextRequest) {
       hour12: true,
     });
 
-    const formattedMessage = `✅ Recurring ${platform} post scheduled successfully!\n\n📅 Frequency: ${frequency}\n⏰ Time: ${time}\n📍 Schedule: ${frequencyText}\n🔜 Next post: ${nextOccurrenceDate}`;
+    const platformsText = platforms.join(", ");
+    const formattedMessage = `✅ Recurring post scheduled for ${platformsText}!\n\n📅 Frequency: ${frequency}\n⏰ Time: ${time}\n📍 Schedule: ${frequencyText}\n🔜 Next post: ${nextOccurrenceDate}`;
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { RotateCw } from "lucide-react";
+import { RotateCw, CheckSquare, Square } from "lucide-react";
 import Button from "./UI/Button";
 
 interface RecurrenceModalProps {
@@ -9,9 +9,9 @@ interface RecurrenceModalProps {
   onConfirm: (recurrenceSettings: RecurrenceSettings) => void;
   frequency: "daily" | "weekly" | "monthly";
   time: string; // 24-hour format HH:mm
-  platform: string;
   prompt: string;
   detectedDays?: number[]; // Pre-detected days from the prompt
+  availablePlatforms: string[]; // Connected platforms the user can post to
 }
 
 export interface RecurrenceSettings {
@@ -19,7 +19,7 @@ export interface RecurrenceSettings {
   time: string;
   selectedDays?: number[]; // For daily: 0 (Sun) to 6 (Sat)
   selectedMonths?: number[]; // For monthly: 1 (Jan) to 12 (Dec)
-  platform: string;
+  platforms: string[]; // Array of selected platforms
   prompt: string;
   timezoneOffset?: number; // Browser's timezone offset in minutes
 }
@@ -55,9 +55,9 @@ export default function RecurrenceModal({
   onConfirm,
   frequency,
   time,
-  platform,
   prompt,
   detectedDays,
+  availablePlatforms,
 }: RecurrenceModalProps) {
   const [selectedTime, setSelectedTime] = useState(time);
   // compute browser timezone offset for display (minutes)
@@ -66,6 +66,7 @@ export default function RecurrenceModal({
   const browserOffsetHours = -browserOffsetMinutes / 60; // e.g. -120 -> +2
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [selectedFrequency, setSelectedFrequency] = useState<
     "daily" | "weekly" | "monthly"
   >(frequency);
@@ -77,7 +78,9 @@ export default function RecurrenceModal({
     // Pre-select detected days if provided
     setSelectedDays(detectedDays || []);
     setSelectedMonths([]);
-  }, [isOpen, time, detectedDays, frequency]);
+    // Pre-select all available platforms by default
+    setSelectedPlatforms(availablePlatforms || []);
+  }, [isOpen, time, detectedDays, frequency, availablePlatforms]);
 
   if (!isOpen) return null;
 
@@ -93,6 +96,14 @@ export default function RecurrenceModal({
     );
   };
 
+  const handlePlatformToggle = (platform: string) => {
+    setSelectedPlatforms((prev) =>
+      prev.includes(platform)
+        ? prev.filter((p) => p !== platform)
+        : [...prev, platform]
+    );
+  };
+
   const handleConfirm = () => {
     // Get browser's timezone offset in minutes
     // getTimezoneOffset() returns offset in minutes (positive for west of UTC, negative for east)
@@ -102,7 +113,7 @@ export default function RecurrenceModal({
     const settings: RecurrenceSettings = {
       frequency: selectedFrequency,
       time: selectedTime,
-      platform,
+      platforms: selectedPlatforms,
       prompt,
       timezoneOffset, // Send timezone offset to backend for UTC conversion
     };
@@ -119,6 +130,7 @@ export default function RecurrenceModal({
   };
 
   const isConfirmDisabled = () => {
+    if (selectedPlatforms.length === 0) return true;
     if (selectedFrequency === "daily" && selectedDays.length === 0) return true;
     if (selectedFrequency === "monthly" && selectedMonths.length === 0)
       return true;
@@ -135,12 +147,53 @@ export default function RecurrenceModal({
             Set Up Recurring Post
           </h2>
           <p className="text-sm text-gray-400 mt-1">
-            Configure your {selectedFrequency} posting schedule for {platform}
+            Configure your {selectedFrequency} posting schedule
           </p>
         </div>
 
         {/* Body */}
         <div className="px-6 py-6 space-y-6">
+          {/* Platform Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-3">
+              Select Platforms <span className="text-red-400">*</span>
+            </label>
+            {availablePlatforms.length > 0 ? (
+              <div className="flex flex-wrap gap-3">
+                {availablePlatforms.map((platform) => (
+                  <button
+                    key={platform}
+                    type="button"
+                    onClick={() => handlePlatformToggle(platform)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      selectedPlatforms.includes(platform)
+                        ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg"
+                        : "bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700"
+                    }`}
+                  >
+                    {selectedPlatforms.includes(platform) ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                    <span className="capitalize">{platform}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-amber-300/80 bg-amber-900/20 px-4 py-3 rounded-lg border border-amber-700/50">
+                ⚠️ No platforms connected. Please connect your social media
+                accounts first.
+              </div>
+            )}
+            {availablePlatforms.length > 0 &&
+              selectedPlatforms.length === 0 && (
+                <p className="text-xs text-red-400 mt-2">
+                  Please select at least one platform
+                </p>
+              )}
+          </div>
+
           {/* Frequency Selector */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
